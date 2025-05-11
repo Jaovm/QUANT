@@ -364,8 +364,12 @@ if run_analysis:
         # Otimização por Sharpe Máximo (SciPy)
         with st.spinner("Otimizando para Máximo Sharpe Ratio (SciPy)... "):
             pesos_max_sharpe, ret_max_sharpe, vol_max_sharpe, sharpe_max = otimizar_portfolio_scipy(
-            ret_med_otim, mat_cov_otim, taxa_livre_risco_input, objetivo="max_sharpe", restricoes_pesos_min_max=(min_aloc_global, max_aloc_global)
-        )
+                ativos_para_otimizacao,
+                df_retornos_historicos[ativos_para_otimizacao],
+                taxa_livre_risco=taxa_livre_risco_input,
+                restricoes_pesos_min_max=(min_aloc_global, max_aloc_global),
+                objetivo="max_sharpe"
+            )
             if pesos_max_sharpe is not None:
                 portfolio_max_sharpe_data = {
                     'retorno_esperado': ret_max_sharpe,
@@ -384,7 +388,13 @@ if run_analysis:
 
         # Otimização por Mínima Volatilidade (SciPy)
         with st.spinner("Otimizando para Mínima Volatilidade (SciPy)... "):
-            pesos_min_vol, ret_min_vol, vol_min_vol, sharpe_min_vol = otimizar_portfolio_scipy(ret_med_otim, mat_cov_otim, taxa_livre_risco_input, objetivo="min_volatility", min_retorno=None, bounds=(min_aloc_global, max_aloc_global))
+            pesos_max_sharpe, ret_max_sharpe, vol_max_sharpe, sharpe_max = otimizar_portfolio_scipy(
+                ativos_para_otimizacao,
+                df_retornos_historicos[ativos_para_otimizacao],
+                taxa_livre_risco=taxa_livre_risco_input,
+                restricoes_pesos_min_max=(min_aloc_global, max_aloc_global),
+                objetivo="min_volatility"
+            )
             if pesos_min_vol is not None:
                 portfolio_min_vol_data = {
                     'retorno_esperado': ret_min_vol,
