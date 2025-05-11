@@ -376,7 +376,7 @@ if run_analysis:
 
         # Otimização por Mínima Volatilidade (SciPy)
         with st.spinner("Otimizando para Mínima Volatilidade (SciPy)... "):
-            pesos_min_vol, ret_min_vol, vol_min_vol, sharpe_min_vol = otimizar_portfolio_scipy(ret_med_otim, mat_cov_otim, taxa_livre_risco_input, objetivo=\"min_volatility\", min_retorno=None, bounds=(min_aloc_global, max_aloc_global))
+            pesos_min_vol, ret_min_vol, vol_min_vol, sharpe_min_vol = otimizar_portfolio_scipy(ret_med_otim, mat_cov_otim, taxa_livre_risco_input, objetivo="min_volatility", min_retorno=None, bounds=(min_aloc_global, max_aloc_global))
             if pesos_min_vol is not None:
                 portfolio_min_vol_data = {
                     'retorno_esperado': ret_min_vol,
