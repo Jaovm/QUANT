@@ -255,13 +255,9 @@ if run_analysis:
         df_fundamental_completo = obter_dados_fundamentalistas_detalhados_br(todos_ativos_analise)
         if not df_fundamental_completo.empty:
             df_fundamental_completo.set_index('ticker', inplace=True, drop=False)
-            # Ajuste para a função calcular_piotroski_f_score_br que retorna (score, criterios, debug_valores) quando verbose=True
-            piotroski_results = df_fundamental_completo.apply(lambda row: calcular_piotroski_f_score_br(row, verbose=True), axis=1)
-            df_fundamental_completo["Piotroski_F_Score"] = piotroski_results.apply(lambda x: x[0] if isinstance(x, tuple) else x) # Pega o score
-            df_fundamental_completo["Piotroski_F_Detalhes"] = piotroski_results.apply(lambda x: x[1] if isinstance(x, tuple) and len(x) > 1 else None) # Pega os critérios
-            # Se desejar os valores de debug, adicione uma nova coluna:
-            # df_fundamental_completo["Piotroski_F_Debug"] = piotroski_results.apply(lambda x: x[2] if isinstance(x, tuple) and len(x) > 2 else None)
-            
+            df_fundamental_completo["Piotroski_F_Score"], df_fundamental_completo["Piotroski_F_Detalhes"] = zip(
+                *df_fundamental_completo.apply(lambda row: calcular_piotroski_f_score_br(row, verbose=True), axis=1)
+            )
             df_fundamental_completo['Quant_Value_Score'] = calcular_value_composite_score(df_fundamental_completo, vc_metrics_config)
             df_fundamental_completo['Altman_Z_Score'] = df_fundamental_completo.apply(calcular_altman_z_score, axis=1)
             df_fundamental_completo['Beneish_M_Score'] = df_fundamental_completo.apply(calcular_beneish_m_score, axis=1)
@@ -270,18 +266,12 @@ if run_analysis:
                 'ticker', 'Piotroski_F_Score', 'Quant_Value_Score',
                 'Altman_Z_Score', 'Beneish_M_Score', 'enterpriseToEbitda', 'netMargin'
             ]
-            # Adicionar colunas que podem ou não estar presentes devido à coleta de dados
-            colunas_fund_existentes = [c for c in ['trailingPE', 'priceToBook', 'dividendYield', 'returnOnEquity'] if c in df_fundamental_completo.columns]
-            colunas_desejadas.extend(colunas_fund_existentes)
             colunas_presentes = [c for c in colunas_desejadas if c in df_fundamental_completo.columns]
-            st.dataframe(df_fundamental_completo[list(dict.fromkeys(colunas_presentes))]) # Remove duplicatas mantendo a ordem
-            if mostrar_detalhes_piotroski and "Piotroski_F_Detalhes" in df_fundamental_completo.columns:
-                try:
-                    detalhes_df = df_fundamental_completo['Piotroski_F_Detalhes'].apply(pd.Series)
-                    detalhes_df['ticker'] = df_fundamental_completo['ticker'].values # Adiciona o ticker para referência
-                    st.dataframe(detalhes_df.set_index('ticker'))
-                except Exception as e_details:
-                    st.warning(f"Não foi possível exibir detalhes do Piotroski: {e_details}")
+            st.dataframe(df_fundamental_completo[colunas_presentes])
+            if mostrar_detalhes_piotroski:
+                detalhes_df = df_fundamental_completo['Piotroski_F_Detalhes'].apply(pd.Series)
+                detalhes_df['ticker'] = df_fundamental_completo['ticker'].values
+                st.dataframe(detalhes_df.set_index('ticker'))
         else:
             st.warning("Não foi possível obter dados fundamentalistas. A otimização avançada pode ser limitada.")
 
@@ -289,196 +279,214 @@ if run_analysis:
         fama_french_factors_df = get_fama_french_factors(ff_start_date, end_date_analise)
         if fama_french_factors_df.empty:
             st.warning("Não foi possível obter dados para os fatores Fama-French. Estimativas de Alpha/Beta não serão realizadas.")
-
-    # --- Otimização e Análise de Carteiras ---
-    st.header("Otimização de Carteira e Análise de Risco")
     carteiras_comparativo_lista = []
     fronteiras_plot_data = []
     portfolios_otimizados_plot_data = []
     carteira_atual_metricas_plot = None
-
-    # Métricas da Carteira Atual
-    if ativos_carteira_lista and not df_retornos_historicos.empty and len(ativos_carteira_lista) > 0:
-        retornos_carteira_atual_df = df_retornos_historicos[ativos_carteira_lista]
-        # Garantir que todos os ativos da carteira atual têm dados de retorno
-        if retornos_carteira_atual_df.shape[1] == len(ativos_carteira_lista) and not retornos_carteira_atual_df.isnull().values.any():
-            pesos_np_atuais = np.array([pesos_carteira_decimal[ativo] for ativo in ativos_carteira_lista])
-            ret_med_atuais = retornos_carteira_atual_df.mean() * 252
-            mat_cov_atuais = retornos_carteira_atual_df.cov() * 252
-            
-            if not ret_med_atuais.empty and not mat_cov_atuais.empty and len(pesos_np_atuais) == len(ret_med_atuais):
-                ret_atual, vol_atual, sharpe_atual = calcular_metricas_portfolio(pesos_np_atuais, ret_med_atuais, mat_cov_atuais, taxa_livre_risco_input)
+    if ativos_carteira_lista and not df_retornos_historicos.empty:
+        retornos_carteira_atual = df_retornos_historicos[ativos_carteira_lista]
+        if retornos_carteira_atual.shape[1] == len(ativos_carteira_lista) and not retornos_carteira_atual.isnull().values.any():
+            pesos_np = np.array([pesos_carteira_decimal[ativo] for ativo in ativos_carteira_lista])
+            ret_med_atuais = retornos_carteira_atual.mean() * 252
+            mat_cov_atuais = retornos_carteira_atual.cov() * 252
+            if not ret_med_atuais.empty and not mat_cov_atuais.empty:
+                ret_atual, vol_atual, sharpe_atual = calcular_metricas_portfolio(pesos_np, ret_med_atuais, mat_cov_atuais, taxa_livre_risco_input)
                 carteira_atual_metricas_plot = {
-                    'retorno_esperado': ret_atual,
-                    'volatilidade': vol_atual,
-                    'sharpe_ratio': sharpe_atual,
-                    'Pesos': pesos_carteira_decimal
+                    'retorno_esperado': ret_atual, 
+                    'volatilidade': vol_atual, 
+                    'sharpe_ratio': sharpe_atual
                 }
                 carteiras_comparativo_lista.append({
-                    "Nome": "Min Volatility (SciPy)",
-                    "Retorno Esperado (%)": portfolio_min_vol_data['retorno_esperado'] * 100,
-                    "Volatilidade (%)": portfolio_min_vol_data['volatilidade'] * 100,
-                    "Sharpe Ratio": portfolio_min_vol_data['sharpe_ratio'],
-                    "Dados": portfolio_min_vol_data
+                    'Nome': 'Carteira Atual',
+                    'Retorno Esperado (%)': ret_atual * 100,
+                    'Volatilidade (%)': vol_atual * 100,
+                    'Sharpe Ratio': sharpe_atual,
+                    'Dados': { 'Pesos': pesos_carteira_decimal }
                 })
-                col_atual1, col_atual2 = st.columns(2)
-                with col_atual1:
-                    st.subheader("Desempenho da Carteira Atual")
-                    st.metric("Retorno Anualizado", f"{ret_atual*100:.2f}%")
-                    st.metric("Volatilidade Anualizada", f"{vol_atual*100:.2f}%")
-                    st.metric("Sharpe Ratio", f"{sharpe_atual:.2f}")
-                with col_atual2:
-                    plot_portfolio_pie_chart(pesos_carteira_decimal, "Composição da Carteira Atual")
             else:
-                st.warning("Não foi possível calcular as métricas da carteira atual devido a dados insuficientes ou inconsistentes para os ativos especificados.")
+                st.warning("Não foi possível calcular métricas para a carteira atual devido a dados insuficientes após o processamento.")
         else:
-            st.warning("Alguns ativos da carteira atual não possuem dados de retorno suficientes no período selecionado.")
-
-    # Ativos para otimização (considerando filtros)
-    ativos_para_otimizacao = todos_ativos_analise
-    if not df_fundamental_completo.empty and min_piotroski_score > 0:
-        ativos_filtrados_piotroski = df_fundamental_completo[df_fundamental_completo["Piotroski_F_Score"] >= min_piotroski_score].index.tolist()
-        ativos_para_otimizacao = [a for a in ativos_para_otimizacao if a in ativos_filtrados_piotroski]
-        st.write(f"Ativos após filtro Piotroski (>= {min_piotroski_score}): {', '.join(ativos_para_otimizacao) if ativos_para_otimizacao else 'Nenhum'}")
-
-    if not ativos_para_otimizacao:
-        st.warning("Nenhum ativo selecionado para otimização após filtros. Verifique os critérios.")
-    elif df_retornos_historicos.empty or df_retornos_historicos[ativos_para_otimizacao].shape[1] < len(ativos_para_otimizacao) or df_retornos_historicos[ativos_para_otimizacao].isnull().values.any().any():
-        st.warning(f"Dados históricos insuficientes ou com NaNs para um ou mais ativos selecionados para otimização: {', '.join(ativos_para_otimizacao)}. Otimização não será executada.")
+            st.warning(
+                f"Dados de retorno ausentes para alguns ativos da carteira atual: {set(ativos_carteira_lista) - set(df_retornos_historicos.columns)}. "
+                "Métricas da carteira atual não calculadas."
+            )
+    ativos_para_otimizar = todos_ativos_analise.copy()
+    if not df_fundamental_completo.empty and 'Piotroski_F_Score' in df_fundamental_completo.columns and min_piotroski_score > 0:
+        ativos_filtrados_piotroski = df_fundamental_completo[df_fundamental_completo['Piotroski_F_Score'] >= min_piotroski_score].index.tolist()
+        if ativos_filtrados_piotroski:
+            st.info(f"Ativos após filtro Piotroski (>= {min_piotroski_score}): {', '.join(ativos_filtrados_piotroski)}")
+            ativos_para_otimizar = [
+                a for a in ativos_filtrados_piotroski
+                if a in df_retornos_historicos.columns and not df_retornos_historicos[a].isnull().all().item()
+            ]
+            if not ativos_para_otimizar:
+                st.warning("Nenhum ativo restou após o filtro Piotroski e verificação de dados de retorno. Usando todos os ativos para otimização.")
+                ativos_para_otimizar = [
+                    a for a in todos_ativos_analise
+                    if a in df_retornos_historicos.columns and not df_retornos_historicos[a].isnull().all().item()
+                ]
+        else:
+            st.warning(f"Nenhum ativo atendeu ao critério Piotroski F-Score >= {min_piotroski_score}. Usando todos os ativos para otimização.")
+            ativos_para_otimizar = [
+                a for a in todos_ativos_analise
+                if a in df_retornos_historicos.columns and not df_retornos_historicos[a].isnull().all().item()
+            ]
     else:
-        retornos_otimizacao = df_retornos_historicos[ativos_para_otimizacao]
-        ret_med_otim = retornos_otimizacao.mean() * 252
-        mat_cov_otim = retornos_otimizacao.cov() * 252
-
-        # Fronteira Eficiente (Markowitz MC)
-        with st.spinner("Calculando Fronteira Eficiente (Monte Carlo)... "):
-            portfolio_max_sharpe, fronteira_mc_pontos = otimizar_portfolio_markowitz_mc(
-                ativos_para_otimizacao,
-                df_retornos_historicos[ativos_para_otimizacao],
-                taxa_livre_risco=taxa_livre_risco_input,
-                num_portfolios_simulados=5000
-            )
+         ativos_para_otimizar = [
+             a for a in todos_ativos_analise
+             if a in df_retornos_historicos.columns and not df_retornos_historicos[a].isnull().all().item()
+         ]
+    if not ativos_para_otimizar:
+        st.error("Nenhum ativo válido restante para otimização após filtros e verificação de dados. Análise interrompida.")
+        st.stop()
+    st.write(f"Ativos efetivamente usados na otimização: {', '.join(ativos_para_otimizar)}")
+    df_retornos_otim = df_retornos_historicos[ativos_para_otimizar].copy().dropna(how='any')
+    if df_retornos_otim.shape[0] < 30:
+        st.error("Dados de retorno insuficientes para os ativos de otimização após limpeza. Análise interrompida.")
+        st.stop()
+    # Monte Carlo Markowitz robusto
+    ativos_validos_mc = [
+        a for a in ativos_para_otimizar
+        if a in df_retornos_otim.columns and not df_retornos_otim[a].isnull().all().item()
+    ]
+    if not ativos_validos_mc:
+        st.error("Nenhum ativo válido com dados históricos suficientes para Monte Carlo.")
+        st.stop()
+    df_retornos_mc = df_retornos_otim[ativos_validos_mc].copy()
+    with st.spinner("Executando Otimização Markowitz (Monte Carlo)..."):
+        portfolio_markowitz_mc, fronteira_mc_pontos = otimizar_portfolio_markowitz_mc(
+            ativos=ativos_validos_mc,
+            df_retornos_historicos=df_retornos_mc,
+            taxa_livre_risco=taxa_livre_risco_input,
+            num_portfolios_simulados=100000
+        )
+        if portfolio_markowitz_mc:
+            carteiras_comparativo_lista.append({
+                'Nome': 'Otimizada Markowitz (Sharpe MC)',
+                'Retorno Esperado (%)': portfolio_markowitz_mc['retorno_esperado'] * 100,
+                'Volatilidade (%)': portfolio_markowitz_mc['volatilidade'] * 100,
+                'Sharpe Ratio': portfolio_markowitz_mc['sharpe_ratio'],
+                'Dados': { 'Pesos': portfolio_markowitz_mc['pesos'] }
+            })
+            portfolios_otimizados_plot_data.append({'nome': 'Markowitz MC Sharpe', 'data': {**portfolio_markowitz_mc, 'Pesos': portfolio_markowitz_mc['pesos']}})
             if fronteira_mc_pontos:
-                fronteiras_plot_data.append({"nome": "Markowitz MC", "pontos": fronteira_mc_pontos})
-        
-        # Otimização por Sharpe Máximo (SciPy)
-        with st.spinner("Otimizando para Máximo Sharpe Ratio (SciPy)... "):
-            portfolio_max_sharpe, fronteira_simulada = otimizar_portfolio_scipy(
-                ativos_para_otimizacao,
-                df_retornos_historicos[ativos_para_otimizacao],
-                taxa_livre_risco=taxa_livre_risco_input,
-                restricoes_pesos_min_max=(min_aloc_global, max_aloc_global),
-                objetivo="max_sharpe"
-            )
-            if portfolio_max_sharpe is not None:
-                portfolio_max_sharpe_data = {
-                    'retorno_esperado': portfolio_max_sharpe['retorno_esperado'],
-                    'volatilidade': portfolio_max_sharpe['volatilidade'],
-                    'sharpe_ratio': portfolio_max_sharpe['sharpe_ratio'],
-                    'Pesos': portfolio_max_sharpe['pesos']
-                }
-                portfolios_otimizados_plot_data.append({"nome": "Max Sharpe (SciPy)", "data": portfolio_max_sharpe_data})
-                carteiras_comparativo_lista.append({
-                    "Nome": "Max Sharpe (SciPy)",
-                    "Retorno Esperado (%)": portfolio_max_sharpe_data['retorno_esperado'] * 100,
-                    "Volatilidade (%)": portfolio_max_sharpe_data['volatilidade'] * 100,
-                    "Sharpe Ratio": portfolio_max_sharpe_data['sharpe_ratio'],
-                    "Dados": portfolio_max_sharpe_data
-                })
-
-        # Otimização por Mínima Volatilidade (SciPy)
-        with st.spinner("Otimizando para Mínima Volatilidade (SciPy)... "):
-            portfolio_min_vol, fronteira_simulada_min_vol = otimizar_portfolio_scipy(
-                ativos_para_otimizacao,
-                df_retornos_historicos[ativos_para_otimizacao],
-                taxa_livre_risco=taxa_livre_risco_input,
-                restricoes_pesos_min_max=(min_aloc_global, max_aloc_global),
-                objetivo="min_volatility"
-            )
-            if portfolio_min_vol is not None:
-                portfolio_min_vol_data = {
-                    'retorno_esperado': portfolio_min_vol['retorno_esperado'],
-                    'volatilidade': portfolio_min_vol['volatilidade'],
-                    'sharpe_ratio': portfolio_min_vol['sharpe_ratio'],
-                    'Pesos': portfolio_min_vol['pesos']
-                }
-                portfolios_otimizados_plot_data.append({"nome": "Min Volatility (SciPy)", "data": portfolio_min_vol_data})
-                carteiras_comparativo_lista.append({
-                    "Nome": "Min Volatility (SciPy)",
-                    "Retorno Esperado (%)": ret_min_vol * 100,
-                    "Volatilidade (%)": vol_min_vol * 100,
-                    "Sharpe Ratio": sharpe_min_vol,
-                    "Dados": portfolio_min_vol_data
-                })
-        
-        # Plotar Fronteira e Carteiras Otimizadas
-        plot_efficient_frontier_comparative(fronteiras_plot_data, portfolios_otimizados_plot_data, carteira_atual_metricas_plot)
-
-        # Exibir Gráficos de Pizza e Tabela Comparativa
-        if portfolios_otimizados_plot_data:
-            st.subheader("Composição das Carteiras Otimizadas")
-            num_cols_pie = min(len(portfolios_otimizados_plot_data), 3) # Max 3 pie charts per row
-            cols_pie = st.columns(num_cols_pie)
-            for i, p_info in enumerate(portfolios_otimizados_plot_data):
-                plot_portfolio_pie_chart(p_info['data']['Pesos'], p_info['nome'], col=cols_pie[i % num_cols_pie])
-
-    # Tabela Comparativa Final
+                fronteiras_plot_data.append({'nome': 'Markowitz MC', 'pontos': fronteira_mc_pontos})
+        else:
+            st.warning("Não foi possível otimizar a carteira com Markowitz (Monte Carlo).")
+    with st.spinner("Executando Otimização Avançada (Quant Value & Econometria)..."):
+        restricoes_pesos_otim = {}
+        for ativo_o in ativos_para_otimizar:
+            restricoes_pesos_otim[ativo_o] = (min_aloc_global, max_aloc_global)
+        pesos_iniciais_otim = None
+        if manter_pesos_atuais_opcao != "Não considerar" and pesos_carteira_decimal:
+            pesos_atuais_para_otim = {a: pesos_carteira_decimal.get(a, 0.0) for a in ativos_para_otimizar}
+            soma_pesos_atuais_otim = sum(pesos_atuais_para_otim.values())
+            if np.isclose(soma_pesos_atuais_otim, 1.0) and soma_pesos_atuais_otim > 0:
+                pesos_iniciais_otim = pesos_atuais_para_otim
+            elif soma_pesos_atuais_otim > 0:
+                pesos_iniciais_otim = {a: p/soma_pesos_atuais_otim for a,p in pesos_atuais_para_otim.items()}
+                st.info(f"Pesos atuais para {manter_pesos_atuais_opcao} foram normalizados para os ativos em otimização.")
+            else:
+                st.info(f"Não foi possível usar pesos atuais como ponto de partida (soma zero ou vazios para ativos em otimização). Usando pesos iguais.")
+            if manter_pesos_atuais_opcao == "Como restrição inferior aproximada":
+                for ativo_o, peso_atual_o in pesos_atuais_para_otim.items():
+                    restricoes_pesos_otim[ativo_o] = (max(min_aloc_global, peso_atual_o * (1-tolerancia_peso_atual*2) ), restricoes_pesos_otim[ativo_o][1])
+            elif manter_pesos_atuais_opcao == "Como restrição de intervalo":
+                for ativo_o, peso_atual_o in pesos_atuais_para_otim.items():
+                    min_restrito = max(0.0, peso_atual_o * (1 - tolerancia_peso_atual/100.0))
+                    max_restrito = min(1.0, peso_atual_o * (1 + tolerancia_peso_atual/100.0))
+                    restricoes_pesos_otim[ativo_o] = (max(min_aloc_global, min_restrito), min(max_aloc_global, max_restrito))
+        df_fund_otim = None
+        if not df_fundamental_completo.empty:
+            df_fund_otim = df_fundamental_completo.reindex(ativos_para_otimizar).dropna(subset=['ticker'])
+            if df_fund_otim.empty:
+                st.warning("Dados fundamentalistas não encontrados para os ativos selecionados para otimização. Otimização avançada usará apenas dados históricos.")
+                df_fund_otim = None
+        portfolio_avancado, _ = otimizar_portfolio_scipy(
+            ativos=ativos_para_otimizar,
+            df_retornos_historicos=df_retornos_otim,
+            df_fundamental_completo=df_fund_otim, 
+            fama_french_factors=fama_french_factors_df if not fama_french_factors_df.empty else None,
+            taxa_livre_risco=taxa_livre_risco_input,
+            pesos_atuais=pesos_iniciais_otim if manter_pesos_atuais_opcao == "Como ponto de partida" else None,
+            restricoes_pesos_min_max=restricoes_pesos_otim,
+            objetivo='max_sharpe'
+        )
+        if portfolio_avancado:
+            carteiras_comparativo_lista.append({
+                'Nome': 'Otimizada Avançada (Quant+Econo)',
+                'Retorno Esperado (%)': portfolio_avancado['retorno_esperado'] * 100,
+                'Volatilidade (%)': portfolio_avancado['volatilidade'] * 100,
+                'Sharpe Ratio': portfolio_avancado['sharpe_ratio'],
+                'Dados': { 'Pesos': portfolio_avancado['pesos'] }
+            })
+            portfolios_otimizados_plot_data.append({'nome': 'Avançada Quant+Econo', 'data': {**portfolio_avancado, 'Pesos': portfolio_avancado['pesos']}})
+            st.subheader("Detalhes da Otimização Avançada")
+            if portfolio_avancado.get('garch_volatilities'):
+                st.write("Volatilidades Anualizadas GARCH (estimadas):")
+                st.json({k: f"{v*100:.2f}%" for k,v in portfolio_avancado['garch_volatilities'].items() if pd.notna(v)})
+            if portfolio_avancado.get('alphas'):
+                st.write("Alphas Anualizados (vs Fama-French 4 Fatores Proxy):")
+                st.json({k: f"{v*100:.2f}%" for k,v in portfolio_avancado['alphas'].items() if pd.notna(v)})
+            if portfolio_avancado.get('arima_forecasts'):
+                st.write("Previsões de Retorno Diário ARIMA (próximo período):")
+                st.json({k: f"{v*100:.4f}%" for k,v in portfolio_avancado['arima_forecasts'].items() if pd.notna(v)})
+        else:
+            st.warning("Não foi possível otimizar a carteira com o modelo avançado.")
+    st.header("Comparativo de Carteiras")
     if carteiras_comparativo_lista:
         display_comparative_table(carteiras_comparativo_lista)
+        plot_efficient_frontier_comparative(fronteiras_plot_data, portfolios_otimizados_plot_data, carteira_atual_metricas_plot)
+        cols_pie = st.columns(len(carteiras_comparativo_lista))
+        for i, c_data in enumerate(carteiras_comparativo_lista):
+            c = c_data.get("Dados")
+            if c and 'Pesos' in c:
+                with cols_pie[i]:
+                    plot_portfolio_pie_chart(c['Pesos'], c_data['Nome'])
     else:
-        st.warning("Nenhuma carteira pôde ser otimizada ou analisada com os dados e configurações fornecidas.")
+        st.info("Nenhuma carteira para comparar.")
 
-    # Sugestão de Alocação para Novo Aporte
-    if novo_capital_input > 0 and portfolios_otimizados_plot_data:
-        st.header("Sugestão de Alocação para Novo Aporte")
-        carteira_referencia_nome = st.selectbox(
-            "Usar qual carteira otimizada como referência para o novo aporte?",
-            options=[p['nome'] for p in portfolios_otimizados_plot_data],
-            index=0 # Default to Max Sharpe
-        )
-        carteira_referencia_data = next((p['data'] for p in portfolios_otimizados_plot_data if p['nome'] == carteira_referencia_nome), None)
-
-        if carteira_referencia_data:
-            pesos_referencia = carteira_referencia_data['Pesos']
-            df_sugestao_aporte = sugerir_alocacao_novo_aporte(
-                carteira_atual_composicao_valores if ativos_carteira_lista else {},
-                valor_total_carteira_atual if ativos_carteira_lista else 0,
-                novo_capital_input,
-                pesos_referencia,
-                df_fundamental=df_fundamental_completo if not df_fundamental_completo.empty else None,
-                top_n_quant=top_n_quant_value,
-                min_quant_score=min_quant_value
+    # ---- SUGESTÃO DE ALOCAÇÃO PARA NOVO APORTE: Fronteira Markowitz + Quant Value ----
+    # ... (processamento da análise, coleta de dados, otimizações, etc.) ...
+    # SUGESTÃO DE ALOCAÇÃO PARA NOVO APORTE: Fronteira Markowitz + Quant Value
+    if novo_capital_input > 0 and carteiras_comparativo_lista and not df_fundamental_completo.empty:
+        st.header("Sugestão de Alocação para Novo Aporte (Fronteira Markowitz + Quant Value)")
+        carteira_markowitz = next((c for c in carteiras_comparativo_lista if c['Nome'].startswith('Otimizada Markowitz')), None)
+        if carteira_markowitz and 'Pesos' in carteira_markowitz['Dados']:
+            # Garante string simples na chave
+            pesos_markowitz = {key_to_str(k): v for k, v in carteira_markowitz['Dados']['Pesos'].items()}
+            quant_value = df_fundamental_completo['Quant_Value_Score']
+            ativos_quant = quant_value.dropna().sort_values(ascending=False)
+            ativos_filtrados = ativos_quant
+            if top_n_quant_value > 0:
+                ativos_filtrados = ativos_filtrados.head(top_n_quant_value)
+            if min_quant_value > 0:
+                ativos_filtrados = ativos_filtrados[ativos_filtrados >= min_quant_value]
+            ativos_filtrados_index = [key_to_str(idx) for idx in ativos_filtrados.index]
+            ativos_escolhidos = [a for a in pesos_markowitz.keys() if a in ativos_filtrados_index]
+            if not ativos_escolhidos:
+                st.warning("Nenhum ativo atende ao critério Quant Value escolhido. Usando todos os da Fronteira Markowitz.")
+                ativos_escolhidos = list(pesos_markowitz.keys())
+            pesos_filtrados = {a: pesos_markowitz[a] for a in ativos_escolhidos}
+            soma_pesos = sum(pesos_filtrados.values())
+            pesos_final = {a: p/soma_pesos for a, p in pesos_filtrados.items()}
+            st.write(f"Ativos selecionados pelo Quant Value: {', '.join(map(str, ativos_escolhidos))}")
+            compras_sugeridas, capital_excedente = sugerir_alocacao_novo_aporte(
+                current_portfolio_composition_values=carteira_atual_composicao_valores,
+                new_capital=novo_capital_input,
+                target_portfolio_weights_decimal=pesos_final
             )
-            if not df_sugestao_aporte.empty:
-                st.subheader(f"Alocação do Novo Aporte (R$ {novo_capital_input:,.2f}) com base em '{carteira_referencia_nome}'")
-                st.dataframe(df_sugestao_aporte.style.format({
-                    'Valor Atual': 'R$ {:,.2f}', 
-                    'Peso Atual (%)': '{:.2f}%',
-                    'Peso Ideal (%)': '{:.2f}%',
-                    'Valor Ideal Após Aporte': 'R$ {:,.2f}',
-                    'Comprar (R$)': 'R$ {:,.2f}',
-                    'Novo Peso (%)': '{:.2f}%',
-                    'Quant_Value_Score': '{:.3f}'
-                }))
-                
-                # Gráfico de pizza para a carteira final após o aporte
-                carteira_final_composicao = {}
-                for idx, row_aporte in df_sugestao_aporte.iterrows():
-                    carteira_final_composicao[row_aporte['Ativo']] = row_aporte['Valor Ideal Após Aporte']
-                
-                # Normalizar para pesos percentuais para o gráfico de pizza
-                total_carteira_final = sum(carteira_final_composicao.values())
-                if total_carteira_final > 0:
-                    pesos_carteira_final_pct = {k: v / total_carteira_final for k, v in carteira_final_composicao.items()}
-                    plot_portfolio_pie_chart(pesos_carteira_final_pct, f"Composição da Carteira Final Estimada (após aporte em '{carteira_referencia_nome}')")
+            if compras_sugeridas:
+                df_compras = pd.DataFrame([
+                    (key_to_str(k), v) for k, v in compras_sugeridas.items()
+                ], columns=["Ativo", "Valor a Comprar"])
+                st.dataframe(df_compras.sort_values("Valor a Comprar", ascending=False).style.format({"Valor a Comprar": "{:.2f}"}), use_container_width=True)
             else:
-                st.warning("Não foi possível gerar sugestão de alocação para o novo aporte com os critérios definidos.")
-        else:
-            st.error("Carteira de referência para o novo aporte não encontrada.")
-    elif novo_capital_input > 0:
-        st.warning("Novo aporte informado, mas nenhuma carteira otimizada está disponível para servir de referência.")
-
+                st.write("Nenhuma compra sugerida (já alinhado ou aporte muito pequeno).")
+            if capital_excedente > 0.01:
+                st.write(f"Capital excedente após tentativa de alocação: R$ {capital_excedente:.2f}")
+    st.success("Análise concluída!")
 else:
-    st.info("Ajuste os parâmetros na barra lateral e clique em 'Executar Análise Avançada' para ver os resultados.")
+    st.info("Ajuste os parâmetros na barra lateral e clique em 'Executar Análise Avançada'.")
 
 
