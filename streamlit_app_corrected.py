@@ -255,8 +255,12 @@ if run_analysis:
         df_fundamental_completo = obter_dados_fundamentalistas_detalhados_br(todos_ativos_analise)
         if not df_fundamental_completo.empty:
             df_fundamental_completo.set_index('ticker', inplace=True, drop=False)
+# Garantindo que a função sempre retorna (score, detalhes)
             df_fundamental_completo["Piotroski_F_Score"], df_fundamental_completo["Piotroski_F_Detalhes"] = zip(
-                *df_fundamental_completo.apply(lambda row: calcular_piotroski_f_score_br(row, verbose=True), axis=1)
+                *df_fundamental_completo.apply(
+                    lambda row: calcular_piotroski_f_score_br(row, verbose=True) if isinstance(calcular_piotroski_f_score_br(row, verbose=True), tuple) else (calcular_piotroski_f_score_br(row, verbose=True), {}),
+                    axis=1
+                )
             )
             df_fundamental_completo['Quant_Value_Score'] = calcular_value_composite_score(df_fundamental_completo, vc_metrics_config)
             df_fundamental_completo['Altman_Z_Score'] = df_fundamental_completo.apply(calcular_altman_z_score, axis=1)
