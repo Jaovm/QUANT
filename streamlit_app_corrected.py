@@ -388,19 +388,19 @@ if run_analysis:
 
         # Otimização por Mínima Volatilidade (SciPy)
         with st.spinner("Otimizando para Mínima Volatilidade (SciPy)... "):
-            pesos_max_sharpe, ret_max_sharpe, vol_max_sharpe, sharpe_max = otimizar_portfolio_scipy(
+            portfolio_min_vol, fronteira_simulada_min_vol = otimizar_portfolio_scipy(
                 ativos_para_otimizacao,
                 df_retornos_historicos[ativos_para_otimizacao],
                 taxa_livre_risco=taxa_livre_risco_input,
                 restricoes_pesos_min_max=(min_aloc_global, max_aloc_global),
                 objetivo="min_volatility"
             )
-            if pesos_min_vol is not None:
+            if portfolio_min_vol is not None:
                 portfolio_min_vol_data = {
-                    'retorno_esperado': ret_min_vol,
-                    'volatilidade': vol_min_vol,
-                    'sharpe_ratio': sharpe_min_vol,
-                    'Pesos': dict(zip(ativos_para_otimizacao, pesos_min_vol))
+                    'retorno_esperado': portfolio_min_vol['retorno_esperado'],
+                    'volatilidade': portfolio_min_vol['volatilidade'],
+                    'sharpe_ratio': portfolio_min_vol['sharpe_ratio'],
+                    'Pesos': portfolio_min_vol['pesos']
                 }
                 portfolios_otimizados_plot_data.append({"nome": "Min Volatility (SciPy)", "data": portfolio_min_vol_data})
                 carteiras_comparativo_lista.append({
