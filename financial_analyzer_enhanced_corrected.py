@@ -907,6 +907,12 @@ if __name__ == '__main__':
     print(df_fundamentos.head())
     print("\nCampos disponíveis:", df_fundamentos.columns.tolist())
 
+def calcular_metricas_portfolio(pesos, retornos_medios_anuais, matriz_covariancia_anual, taxa_livre_risco):
+    retorno_portfolio = np.sum(retornos_medios_anuais * pesos)
+    volatilidade_portfolio = np.sqrt(np.dot(pesos.T, np.dot(matriz_covariancia_anual, pesos)))
+    sharpe_ratio = (retorno_portfolio - taxa_livre_risco) / volatilidade_portfolio if volatilidade_portfolio != 0 else -np.inf
+    return retorno_portfolio, volatilidade_portfolio, sharpe_ratio
+    
     # Aplicar cálculos de scores
 def otimizar_portfolio_scipy(
     ativos,
