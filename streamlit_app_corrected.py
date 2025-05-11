@@ -357,7 +357,7 @@ if run_analysis:
         
         # Otimização por Sharpe Máximo (SciPy)
         with st.spinner("Otimizando para Máximo Sharpe Ratio (SciPy)... "):
-            pesos_max_sharpe, ret_max_sharpe, vol_max_sharpe, sharpe_max = otimizar_portfolio_scipy(ret_med_otim, mat_cov_otim, taxa_livre_risco_input, objetivo=\"max_sharpe\", min_retorno=None, bounds=(min_aloc_global, max_aloc_global))
+            pesos_max_sharpe, ret_max_sharpe, vol_max_sharpe, sharpe_max = otimizar_portfolio_scipy(ret_med_otim, mat_cov_otim, taxa_livre_risco_input, objetivo="max_sharpe", min_retorno=None, bounds=(min_aloc_global, max_aloc_global))
             if pesos_max_sharpe is not None:
                 portfolio_max_sharpe_data = {
                     'retorno_esperado': ret_max_sharpe,
