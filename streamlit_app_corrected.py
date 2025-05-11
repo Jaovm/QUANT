@@ -10,7 +10,7 @@ st.title("Painel Avançado de Otimização de Carteira QUANTOVITZ")
 
 # --- Importar funções do financial_analyzer_enhanced_corrected.py ---
 try:
-    from financial_analyzer_enhanced import (
+    from financial_analyzer_enhanced_corrected import (
         obter_dados_historicos_yf,
         obter_dados_fundamentalistas_detalhados_br,
         calcular_piotroski_f_score_br,
