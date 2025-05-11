@@ -363,19 +363,19 @@ if run_analysis:
         
         # Otimização por Sharpe Máximo (SciPy)
         with st.spinner("Otimizando para Máximo Sharpe Ratio (SciPy)... "):
-            pesos_max_sharpe, ret_max_sharpe, vol_max_sharpe, sharpe_max = otimizar_portfolio_scipy(
+            portfolio_max_sharpe, fronteira_simulada = otimizar_portfolio_scipy(
                 ativos_para_otimizacao,
                 df_retornos_historicos[ativos_para_otimizacao],
                 taxa_livre_risco=taxa_livre_risco_input,
                 restricoes_pesos_min_max=(min_aloc_global, max_aloc_global),
                 objetivo="max_sharpe"
             )
-            if pesos_max_sharpe is not None:
+            if portfolio_max_sharpe is not None:
                 portfolio_max_sharpe_data = {
-                    'retorno_esperado': ret_max_sharpe,
-                    'volatilidade': vol_max_sharpe,
-                    'sharpe_ratio': sharpe_max,
-                    'Pesos': dict(zip(ativos_para_otimizacao, pesos_max_sharpe))
+                    'retorno_esperado': portfolio_max_sharpe['retorno_esperado'],
+                    'volatilidade': portfolio_max_sharpe['volatilidade'],
+                    'sharpe_ratio': portfolio_max_sharpe['sharpe_ratio'],
+                    'Pesos': portfolio_max_sharpe['pesos']
                 }
                 portfolios_otimizados_plot_data.append({"nome": "Max Sharpe (SciPy)", "data": portfolio_max_sharpe_data})
                 carteiras_comparativo_lista.append({
