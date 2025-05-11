@@ -352,7 +352,7 @@ if run_analysis:
 
         # Fronteira Eficiente (Markowitz MC)
         with st.spinner("Calculando Fronteira Eficiente (Monte Carlo)... "):
-            fronteira_mc_pontos, _, _ = otimizar_portfolio_markowitz_mc(ret_med_otim, mat_cov_otim, taxa_livre_risco_input, num_portfolios=5000)
+            fronteira_mc_pontos, _, _ = otimizar_portfolio_markowitz_mc(ret_med_otim, mat_cov_otim, taxa_livre_risco_input, num_portfolios_simulados=5000)
             if fronteira_mc_pontos:
                 fronteiras_plot_data.append({"nome": "Markowitz MC", "pontos": fronteira_mc_pontos})
         
