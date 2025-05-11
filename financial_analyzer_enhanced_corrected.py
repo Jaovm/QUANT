@@ -834,6 +834,25 @@ def get_fama_french_factors(start_date, end_date, risk_free_rate_series=None):
     factors_df.dropna(inplace=True)
     return factors_df
 
+def ajustar_retornos_esperados(base_retornos_medios_anuais, df_fundamental, alphas, arima_forecasts, quant_value_scores, piotroski_scores):
+    adjusted_retornos = base_retornos_medios_anuais.copy()
+    for ativo in adjusted_retornos.index:
+        adjustment_factor = 1.0
+        if piotroski_scores is not None and ativo in piotroski_scores and pd.notna(piotroski_scores[ativo]):
+            pscore = piotroski_scores[ativo]
+            if pscore <= 2: adjustment_factor *= 0.9
+            elif pscore >=7: adjustment_factor *= 1.1
+        if quant_value_scores is not None and ativo in quant_value_scores and pd.notna(quant_value_scores[ativo]):
+            qscore = quant_value_scores[ativo]
+            adjustment_factor *= (1 + (qscore - 0.5) * 0.2)
+        adjusted_retornos[ativo] *= adjustment_factor
+        if alphas is not None and ativo in alphas and pd.notna(alphas[ativo]):
+            adjusted_retornos[ativo] += alphas[ativo]
+        if arima_forecasts is not None and ativo in arima_forecasts and pd.notna(arima_forecasts[ativo]):
+            annualized_arima_forecast = arima_forecasts[ativo] * 252
+            adjusted_retornos[ativo] = (adjusted_retornos[ativo] * 0.8) + (annualized_arima_forecast * 0.2)
+    return adjusted_retornos
+
 def estimar_fatores_alpha_beta(asset_returns_series, factor_df):
     if not isinstance(asset_returns_series, pd.Series) or asset_returns_series.empty or asset_returns_series.isna().all():
         return np.nan, {}
@@ -912,7 +931,7 @@ def calcular_metricas_portfolio(pesos, retornos_medios_anuais, matriz_covarianci
     volatilidade_portfolio = np.sqrt(np.dot(pesos.T, np.dot(matriz_covariancia_anual, pesos)))
     sharpe_ratio = (retorno_portfolio - taxa_livre_risco) / volatilidade_portfolio if volatilidade_portfolio != 0 else -np.inf
     return retorno_portfolio, volatilidade_portfolio, sharpe_ratio
-    
+
     # Aplicar cálculos de scores
 def otimizar_portfolio_scipy(
     ativos,
