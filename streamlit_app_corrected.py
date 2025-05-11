@@ -18,7 +18,6 @@ try:
         get_fama_french_factors,
         calcular_beneish_m_score,
         calcular_altman_z_score,
-        otimizar_portfolio_scipy,
         otimizar_portfolio_markowitz_mc,
         calcular_metricas_portfolio, 
         sugerir_alocacao_novo_aporte,
