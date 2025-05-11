@@ -1056,7 +1056,7 @@ def otimizar_portfolio_scipy(
     fronteira_pontos_simulados = []
     return portfolio_otimizado, fronteira_pontos_simulados
 
-def otimizar_portfolio_markowitz_mc(ativos, df_retornos_historicos, taxa_livre_risco=RISK_FREE_RATE_DEFAULT, num_portfolios_simulados=10000):
+def otimizar_portfolio_markowitz_mc(ativos, df_retornos_historicos, taxa_livre_risco=RISK_FREE_RATE_DEFAULT, num_portfolios_simulados=100000):
     if df_retornos_historicos.empty or len(ativos) == 0:
         return None, None, []
     retornos_considerados = df_retornos_historicos[ativos].copy()
