@@ -315,11 +315,11 @@ if run_analysis:
                     'Pesos': pesos_carteira_decimal
                 }
                 carteiras_comparativo_lista.append({
-                    "Nome": "Carteira Atual",
-                    "Retorno Esperado (%)": ret_atual * 100,
-                    "Volatilidade (%)": vol_atual * 100,
-                    "Sharpe Ratio": sharpe_atual,
-                    "Dados": carteira_atual_metricas_plot
+                    "Nome": "Min Volatility (SciPy)",
+                    "Retorno Esperado (%)": portfolio_min_vol_data['retorno_esperado'] * 100,
+                    "Volatilidade (%)": portfolio_min_vol_data['volatilidade'] * 100,
+                    "Sharpe Ratio": portfolio_min_vol_data['sharpe_ratio'],
+                    "Dados": portfolio_min_vol_data
                 })
                 col_atual1, col_atual2 = st.columns(2)
                 with col_atual1:
