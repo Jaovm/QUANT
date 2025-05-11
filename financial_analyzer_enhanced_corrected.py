@@ -1184,5 +1184,4 @@ calcular_piotroski_f_score = calcular_piotroski_f_score_br
 beneish_m_score = calcular_beneish_m_score
 obter_dados_fundamentalistas_detalhados = obter_dados_fundamentalistas_detalhados_br
 
-    print("\nAnálise concluída.")
 
