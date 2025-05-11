@@ -10,16 +10,21 @@ st.title("Painel Avançado de Otimização de Carteira QUANTOVITZ")
 
 # --- Importar funções do financial_analyzer_enhanced_corrected.py ---
 try:
-    from financial_analyzer_enhanced_corrected import (
+    from financial_analyzer_enhanced import (
         obter_dados_historicos_yf,
         obter_dados_fundamentalistas_detalhados_br,
         calcular_piotroski_f_score_br,
         calcular_value_composite_score,
         get_fama_french_factors,
         calcular_beneish_m_score,
+        otimizar_portfolio_scipy,
         calcular_altman_z_score,
+        otimizar_portfolio_markowitz_mc,
+        calcular_metricas_portfolio, 
+        sugerir_alocacao_novo_aporte,
         RISK_FREE_RATE_DEFAULT
     )
+    
     st.sidebar.success("Módulo de análise corrigido carregado!")
 except ImportError as e:
     st.error(f"Erro ao importar o módulo 'financial_analyzer_enhanced_corrected.py': {e}. Certifique-se de que o arquivo está no diretório correto e todas as dependências (arch, statsmodels) estão instaladas.")
