@@ -380,9 +380,9 @@ if run_analysis:
                 portfolios_otimizados_plot_data.append({"nome": "Max Sharpe (SciPy)", "data": portfolio_max_sharpe_data})
                 carteiras_comparativo_lista.append({
                     "Nome": "Max Sharpe (SciPy)",
-                    "Retorno Esperado (%)": ret_max_sharpe * 100,
-                    "Volatilidade (%)": vol_max_sharpe * 100,
-                    "Sharpe Ratio": sharpe_max,
+                    "Retorno Esperado (%)": portfolio_max_sharpe_data['retorno_esperado'] * 100,
+                    "Volatilidade (%)": portfolio_max_sharpe_data['volatilidade'] * 100,
+                    "Sharpe Ratio": portfolio_max_sharpe_data['sharpe_ratio'],
                     "Dados": portfolio_max_sharpe_data
                 })
 
