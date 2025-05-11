@@ -18,7 +18,6 @@ try:
         get_fama_french_factors,
         calcular_beneish_m_score,
         calcular_altman_z_score,
-        calcular_metricas_portfolio, 
         sugerir_alocacao_novo_aporte,
         RISK_FREE_RATE_DEFAULT
     )
