@@ -18,7 +18,6 @@ try:
         get_fama_french_factors,
         calcular_beneish_m_score,
         calcular_altman_z_score,
-        sugerir_alocacao_novo_aporte,
         RISK_FREE_RATE_DEFAULT
     )
     st.sidebar.success("Módulo de análise corrigido carregado!")
