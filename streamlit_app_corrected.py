@@ -258,7 +258,7 @@ if run_analysis:
 # Garantindo que a função sempre retorna (score, detalhes)
             df_fundamental_completo["Piotroski_F_Score"], df_fundamental_completo["Piotroski_F_Detalhes"] = zip(
                 *df_fundamental_completo.apply(
-                    lambda row: calcular_piotroski_f_score_br(row, verbose=True) if isinstance(calcular_piotroski_f_score_br(row, verbose=True), tuple) else (calcular_piotroski_f_score_br(row, verbose=True), {}),
+                    lambda row: calcular_piotroski_f_score_br(row, verbose=True)[:2],
                     axis=1
                 )
             )
