@@ -4,7 +4,6 @@ from datetime import datetime
 from financial_analyzer_enhanced_corrected import (
     calcular_piotroski_f_score_br,
     obter_dados_fundamentalistas_detalhados_br,
-    preencher_campos_faltantes_brapi,
     otimizar_portfolio_scipy
 )
 import matplotlib.pyplot as plt
