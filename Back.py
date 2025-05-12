@@ -115,13 +115,13 @@ def obter_dados_historicos_precos_yf(ativos_e_benchmark, start_date_str, end_dat
     for ticker in ativos_e_benchmark:
         try:
             data = yf.download(ticker, start=start_date_str, end=end_date_str, progress=False)
-            if not data.empty and \'Adj Close\' in data.columns:
-                all_data[ticker] = data[\'Adj Close\']
+            if not data.empty and 'Adj Close' in data.columns:
+                all_data[ticker] = data['Adj Close']
             else:
                 st.warning(f"Dados de fechamento ajustado não encontrados para {ticker}.")
         except Exception as e:
             st.error(f"Erro ao baixar dados para {ticker}: {e}")
-    return all_data.dropna(how=\'all\')
+    return all_data.dropna(how='all')
 
 
 def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_mensal, min_piotroski, max_weight_ativo, min_weight_ativo, lookback_otimizacao_meses):
@@ -129,7 +129,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    datas_rebalanceamento = pd.date_range(start_date, end_date, freq=\'MS\') # Primeiro dia de cada mês
+    datas_rebalanceamento = pd.date_range(start_date, end_date, freq='MS') # Primeiro dia de cada mês
     
     carteira_valor = aporte_mensal # Valor inicial da carteira é o primeiro aporte
     portfolio_historico_valor = pd.Series(index=datas_rebalanceamento, dtype=float)
@@ -142,7 +142,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
     todos_ativos_para_precos = list(set(ativos_lista + [benchmark_ticker]))
     status_text.text("Baixando dados históricos de preços...")
     all_prices_df = obter_dados_historicos_precos_yf(todos_ativos_para_precos, 
-                                                     (datetime.strptime(start_date, \'%Y-%m-%d\') - relativedelta(months=lookback_otimizacao_meses)).strftime(\'%Y-%m-%d\'), 
+                                                     (datetime.strptime(start_date, '%Y-%m-%d') - relativedelta(months=lookback_otimizacao_meses)).strftime('%Y-%m-%d'), 
                                                      end_date)
     if all_prices_df.empty:
         st.error("Não foi possível obter dados de preços. Backtest interrompido.")
@@ -153,7 +153,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
 
     for i, data_ref in enumerate(datas_rebalanceamento):
         progress_bar.progress((i + 1) / total_steps)
-        status_text.text(f"Processando {data_ref.strftime(\'%Y-%m-%d\')}...")
+        status_text.text(f"Processando {data_ref.strftime('%Y-%m-%d')}...")
         
         # 0. Atualizar valor da carteira com base nos preços do dia anterior ao rebalanceamento (ou do dia do aporte se for o primeiro)
         # Se não for o primeiro mês, atualiza o valor dos ativos em carteira
@@ -186,7 +186,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
         # A função obter_dados_fundamentalistas_detalhados_br já busca os dados mais recentes.
         dados_fund = obter_dados_fundamentalistas_detalhados_br(ativos_lista)
         if dados_fund.empty:
-            status_text.text(f"Dados fundamentalistas não encontrados para {data_ref.strftime(\'%Y-%m-%d\')}. Mantendo carteira anterior se houver.")
+            status_text.text(f"Dados fundamentalistas não encontrados para {data_ref.strftime('%Y-%m-%d')}. Mantendo carteira anterior se houver.")
             # Se não há dados fundamentalistas, não rebalanceia, apenas mantém o que tem e o valor é atualizado pelo aporte e preços.
             # O cash_value já foi atualizado com o aporte.
             # Atualizar o valor dos holdings com os preços mais recentes
@@ -217,7 +217,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
                     else:
                         f_scores[ticker] = f_score_result
                 except Exception as e:
-                    # st.warning(f"Erro ao calcular Piotroski para {ticker} em {data_ref.strftime(\'%Y-%m-%d\')}: {e}")
+                    # st.warning(f"Erro ao calcular Piotroski para {ticker} em {data_ref.strftime('%Y-%m-%d')}: {e}")
                     f_scores[ticker] = 0
             else:
                 f_scores[ticker] = 0
@@ -226,7 +226,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
         ativos_elegiveis = [ticker for ticker, score in f_scores.items() if score >= min_piotroski]
 
         if not ativos_elegiveis:
-            status_text.text(f"Nenhum ativo elegível em {data_ref.strftime(\'%Y-%m-%d\')}. Mantendo caixa.")
+            status_text.text(f"Nenhum ativo elegível em {data_ref.strftime('%Y-%m-%d')}. Mantendo caixa.")
             # Se não há ativos elegíveis, todo o valor da carteira (que já inclui o novo aporte) vira/continua caixa.
             # Os ativos que estavam em carteira são "vendidos" (simbolicamente, o valor deles é transferido para o caixa)
             # e o portfolio_holdings é zerado.
@@ -242,18 +242,18 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
         
         # Filtrar all_prices_df para o período e ativos corretos
         precos_otimizacao = all_prices_df.loc[start_date_otimizacao:end_date_otimizacao, ativos_elegiveis].copy()
-        precos_otimizacao.dropna(axis=1, how=\'any\', inplace=True) # Remove ativos sem dados suficientes no período
+        precos_otimizacao.dropna(axis=1, how='any', inplace=True) # Remove ativos sem dados suficientes no período
         
         if precos_otimizacao.shape[0] < 2 or precos_otimizacao.shape[1] == 0: # Precisa de pelo menos 2 pontos para pct_change e pelo menos 1 ativo
-            status_text.text(f"Dados de retorno insuficientes para otimização em {data_ref.strftime(\'%Y-%m-%d\')}. Mantendo caixa/carteira anterior.")
+            status_text.text(f"Dados de retorno insuficientes para otimização em {data_ref.strftime('%Y-%m-%d')}. Mantendo caixa/carteira anterior.")
             cash_value = portfolio_historico_valor[data_ref]
             portfolio_holdings = {}
             continue
             
-        retornos_otimizacao = precos_otimizacao.pct_change().dropna(how=\'all\')
+        retornos_otimizacao = precos_otimizacao.pct_change().dropna(how='all')
         
         if retornos_otimizacao.empty or len(retornos_otimizacao.columns) == 0:
-            status_text.text(f"Retornos para otimização não puderam ser calculados em {data_ref.strftime(\'%Y-%m-%d\')}. Mantendo caixa/carteira anterior.")
+            status_text.text(f"Retornos para otimização não puderam ser calculados em {data_ref.strftime('%Y-%m-%d')}. Mantendo caixa/carteira anterior.")
             cash_value = portfolio_historico_valor[data_ref]
             portfolio_holdings = {}
             continue
@@ -267,7 +267,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
                                                                   max_weight=max_weight_ativo)
 
         if pesos_otimizados.empty or pesos_otimizados.sum() == 0:
-            status_text.text(f"Otimização não retornou pesos válidos em {data_ref.strftime(\'%Y-%m-%d\')}. Mantendo caixa/carteira anterior.")
+            status_text.text(f"Otimização não retornou pesos válidos em {data_ref.strftime('%Y-%m-%d')}. Mantendo caixa/carteira anterior.")
             cash_value = portfolio_historico_valor[data_ref]
             portfolio_holdings = {}
             continue
