@@ -214,7 +214,7 @@ def obter_dados_fundamentalistas_detalhados_br(ativos):
         # Esta seção simula uma tentativa de preenchimento.
         try:
             # Idealmente, o token da API não deveria estar hardcoded.
-            url_brapi = f"https://brapi.dev/api/quote/{ativo}?token=YOUR_BRAPI_TOKEN_HERE&fundamental=true"
+            url_brapi = f"https://brapi.dev/api/quote/{ativo}?token=2D29LijXrSGRJAQ7De5bUh&fundamental=true"
             # Substitua YOUR_BRAPI_TOKEN_HERE pelo seu token real ou gerencie-o via config/env var.
             r = requests.get(url_brapi, timeout=5)
             if r.status_code == 200:
