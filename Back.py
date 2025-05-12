@@ -115,13 +115,16 @@ def obter_dados_historicos_precos_yf(ativos_e_benchmark, start_date_str, end_dat
     for ticker in ativos_e_benchmark:
         try:
             data = yf.download(ticker, start=start_date_str, end=end_date_str, progress=False)
-            if not data.empty and 'Adj Close' in data.columns:
+            if not data.empty and 'Adj Close' in data.columns and data['Adj Close'].notna().any():
                 all_data[ticker] = data['Adj Close']
             else:
-                st.warning(f"Dados de fechamento ajustado não encontrados para {ticker}.")
+                st.warning(f"Dados de fechamento ajustado não encontrados para {ticker}. Verifique o ticker ou o período.")
         except Exception as e:
             st.error(f"Erro ao baixar dados para {ticker}: {e}")
-    return all_data.dropna(how='all')
+    all_data = all_data.dropna(how='all')
+    if all_data.empty:
+        st.error("Nenhum dado de fechamento ajustado pôde ser obtido para os ativos selecionados.")
+    return all_data
 
 
 def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_mensal, min_piotroski, max_weight_ativo, min_weight_ativo, lookback_otimizacao_meses):
@@ -129,21 +132,21 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    datas_rebalanceamento = pd.date_range(start_date, end_date, freq='MS') # Primeiro dia de cada mês
-    
-    carteira_valor = aporte_mensal # Valor inicial da carteira é o primeiro aporte
+    datas_rebalanceamento = pd.date_range(start_date, end_date, freq='MS')
+    carteira_valor = aporte_mensal
     portfolio_historico_valor = pd.Series(index=datas_rebalanceamento, dtype=float)
-    portfolio_holdings = {} # Para rastrear quantidade de cada ação
+    portfolio_holdings = {}
     cash_value = aporte_mensal
     current_asset_prices = {}
     ativos_selecionados_anualmente = {}
 
-    # Obter todos os dados de preços de uma vez para eficiência
     todos_ativos_para_precos = list(set(ativos_lista + [benchmark_ticker]))
     status_text.text("Baixando dados históricos de preços...")
-    all_prices_df = obter_dados_historicos_precos_yf(todos_ativos_para_precos, 
-                                                     (datetime.strptime(start_date, '%Y-%m-%d') - relativedelta(months=lookback_otimizacao_meses)).strftime('%Y-%m-%d'), 
-                                                     end_date)
+    all_prices_df = obter_dados_historicos_precos_yf(
+        todos_ativos_para_precos,
+        (datetime.strptime(start_date, "%Y-%m-%d") - relativedelta(months=lookback_otimizacao_meses)).strftime("%Y-%m-%d"),
+        end_date
+    )
     if all_prices_df.empty:
         st.error("Não foi possível obter dados de preços. Backtest interrompido.")
         return None, None, None, None, None
@@ -348,9 +351,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
     valor_final_portfolio = 0
     data_final_para_preco = end_date
     if isinstance(data_final_para_preco, str):
-        data_final_para_preco = datetime.strptime(end_date, 
-imazole("%Y-%m-%d"))
-    
+    data_final_para_preco = datetime.strptime(end_date, "%Y-%m-%d")
     # Achar o último dia com preços disponíveis até a data final do backtest
     while data_final_para_preco not in all_prices_df.index and data_final_para_preco >= all_prices_df.index.min():
         data_final_para_preco -= timedelta(days=1)
@@ -382,9 +383,9 @@ imazole("%Y-%m-%d"))
 
     # Benchmark
     status_text.text("Calculando benchmark...")
-    benchmark_prices = all_prices_df[[benchmark_ticker]].loc[datetime.strptime(start_date, 
-imazole("%Y-%m-%d")):datetime.strptime(end_date, 
-imazole("%Y-%m-%d"))].copy()
+    benchmark_prices = all_prices_df[[benchmark_ticker]].loc[
+        datetime.strptime(start_date, "%Y-%m-%d"):datetime.strptime(end_date, "%Y-%m-%d")
+    ].copy()
     benchmark_prices.dropna(inplace=True)
     
     benchmark_historico_valor = pd.Series(index=benchmark_prices.index, dtype=float)
