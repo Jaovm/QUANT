@@ -73,7 +73,7 @@ def otimizar_portfolio_scipy(retornos_df, risk_free_rate=0.02, min_weight=0.01, 
     initial_guess = num_assets * [1. / num_assets,]
 
     result = minimize(neg_sharpe_ratio, initial_guess, args=args,
-                        method=\'SLSQP\', bounds=bounds, constraints=constraints)
+                        method='SLSQP', bounds=bounds, constraints=constraints)
 
     if result.success:
         optimized_weights = pd.Series(result.x, index=retornos_df.columns)
