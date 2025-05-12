@@ -351,7 +351,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
     valor_final_portfolio = 0
     data_final_para_preco = end_date
     if isinstance(data_final_para_preco, str):
-    data_final_para_preco = datetime.strptime(end_date, "%Y-%m-%d")
+        data_final_para_preco = datetime.strptime(end_date, "%Y-%m-%d")
     # Achar o último dia com preços disponíveis até a data final do backtest
     while data_final_para_preco not in all_prices_df.index and data_final_para_preco >= all_prices_df.index.min():
         data_final_para_preco -= timedelta(days=1)
