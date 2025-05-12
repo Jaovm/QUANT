@@ -303,7 +303,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
         else:
             for ticker in pesos_otimizados.index:
                 if pesos_otimizados[ticker] > 0 and (ticker not in all_prices_df.columns or pd.isna(all_prices_df.loc[data_para_compra, ticker])):
-                    # st.warning(f"Preço não disponível para {ticker} em {data_para_compra.strftime(\"%Y-%m-%d\")} para compra. Ativo será ignorado neste mês.")
+                    st.warning(f"Preço não disponível para {ticker} em {data_para_compra.strftime('%Y-%m-%d')} para compra. Ativo será ignorado neste mês.")
                     pesos_otimizados[ticker] = 0 # Ignora ativo se não tem preço
             if pesos_otimizados.sum() > 0:
                 pesos_otimizados = pesos_otimizados / pesos_otimizados.sum() # Renormaliza se algum ativo foi removido
@@ -311,7 +311,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
                 precos_compra_validos = False
 
         if not precos_compra_validos or pesos_otimizados.empty or pesos_otimizados.sum() == 0:
-            status_text.text(f"Não foi possível obter preços para alocação em {data_ref.strftime(\"%Y-%m-%d\")}. Mantendo caixa.")
+            status_text.text(f"Não foi possível obter preços para alocação em {data_ref.strftime("%Y-%m-%d")}. Mantendo caixa.")
             cash_value = cash_to_invest_this_month
             portfolio_holdings = {}
         else:
@@ -331,7 +331,7 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
                         ativos_pesos_mes[ticker] = weight
                         current_asset_prices[ticker] = preco_ativo # Atualiza o último preço conhecido
                     else:
-                        # st.warning(f"Preço inválido para {ticker} em {data_para_compra.strftime(\"%Y-%m-%d\")}. Não foi possível comprar.")
+                        st.warning(f"Preço inválido para {ticker} em {data_para_compra.strftime("%Y-%m-%d")}. Não foi possível comprar.")
                         pass # O valor destinado a este ativo permanece em caixa
             
             ativos_selecionados_anualmente[current_year].append({
@@ -434,7 +434,7 @@ imazole("%Y-%m-%d"))].copy()
         # Garantir que o benchmark_historico_valor cubra todo o período do portfolio_historico_valor para comparação
         # Reindexar e preencher para frente
         if not portfolio_historico_valor.empty:
-            benchmark_historico_valor = benchmark_historico_valor.reindex(portfolio_historico_valor.index, method=\"ffill\").fillna(method=\"bfill\")
+            benchmark_historico_valor = benchmark_historico_valor.reindex(portfolio_historico_valor.index, method="ffill").fillna(method="bfill")
 
     status_text.empty()
     return portfolio_historico_valor, benchmark_historico_valor, calcular_metricas(portfolio_historico_valor, aporte_mensal * len(datas_rebalanceamento)), calcular_metricas(benchmark_historico_valor, aporte_mensal * len(datas_rebalanceamento)) if not benchmark_historico_valor.empty else None, ativos_selecionados_anualmente
@@ -542,10 +542,10 @@ imazole("%Y-%m-%d"))
         if portfolio_values is not None and not portfolio_values.empty:
             st.subheader("Evolução do Valor da Carteira vs. Benchmark")
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=portfolio_values.index, y=portfolio_values, mode=\"lines\", name=\"Carteira Otimizada\"))
+            fig.add_trace(go.Scatter(x=portfolio_values.index, y=portfolio_values, mode="lines", name="Carteira Otimizada"))
             if benchmark_values is not None and not benchmark_values.empty:
-                fig.add_trace(go.Scatter(x=benchmark_values.index, y=benchmark_values, mode=\"lines\", name=f"Benchmark ({benchmark_ticker_input})\"))
-            fig.update_layout(title=\"Valor da Carteira ao Longo do Tempo\", xaxis_title=\"Data\", yaxis_title=\"Valor (R$)\", legend_title=\"Legenda\")
+                fig.add_trace(go.Scatter(x=benchmark_values.index, y=benchmark_values, mode="lines", name=f"Benchmark ({benchmark_ticker_input})"))
+            fig.update_layout(title="Valor da Carteira ao Longo do Tempo", xaxis_title="Data", yaxis_title="Valor (R$)", legend_title="Legenda")
             st.plotly_chart(fig, use_container_width=True)
 
             st.subheader("Métricas Finais do Portfólio")
@@ -561,10 +561,10 @@ imazole("%Y-%m-%d"))
                 # Converter para percentual
                 for col_pct in ["Retorno Total s/ Investimento (%)", "Retorno Anualizado (CAGR) (%)", "Volatilidade Anualizada (%)", "Drawdown Máximo (%)"]:
                     if col_pct in metrics_df.columns:
-                         metrics_df[col_pct] = (metrics_df[col_pct] * 100).round(2).astype(str) + \"%\"
+                         metrics_df[col_pct] = (metrics_df[col_pct] * 100).round(2).astype(str) + "%"
                 metrics_df["Sharpe Ratio (Anualizado)"] = metrics_df["Sharpe Ratio (Anualizado)"].round(2)
-                metrics_df["Valor Final"] = metrics_df["Valor Final"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(\",\", \"X\").replace(\".\", \",\").replace(\"X\", \".\"))
-                metrics_df["Total Investido"] = metrics_df["Total Investido"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(\",\", \"X\").replace(\".\", \",\").replace(\"X\", \".\"))
+                metrics_df["Valor Final"] = metrics_df["Valor Final"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                metrics_df["Total Investido"] = metrics_df["Total Investido"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 st.table(metrics_df.T.rename(columns={0: "Carteira"}))
             
             if benchmark_metrics:
@@ -578,10 +578,10 @@ imazole("%Y-%m-%d"))
                 })
                 for col_pct in ["Retorno Total s/ Investimento (%)", "Retorno Anualizado (CAGR) (%)", "Volatilidade Anualizada (%)", "Drawdown Máximo (%)"]:
                     if col_pct in metrics_bench_df.columns:
-                        metrics_bench_df[col_pct] = (metrics_bench_df[col_pct] * 100).round(2).astype(str) + \"%\"
+                        metrics_bench_df[col_pct] = (metrics_bench_df[col_pct] * 100).round(2).astype(str) + "%"
                 metrics_bench_df["Sharpe Ratio (Anualizado)"] = metrics_bench_df["Sharpe Ratio (Anualizado)"].round(2)
-                metrics_bench_df["Valor Final"] = metrics_bench_df["Valor Final"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(\",\", \"X\").replace(\".\", \",\").replace(\"X\", \".\"))
-                metrics_bench_df["Total Investido"] = metrics_bench_df["Total Investido"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(\",\", \"X\").replace(\".\", \",\").replace(\"X\", \".\"))
+                metrics_bench_df["Valor Final"] = metrics_bench_df["Valor Final"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                metrics_bench_df["Total Investido"] = metrics_bench_df["Total Investido"].round(2).apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 st.table(metrics_bench_df.T.rename(columns={0: "Benchmark"}))
 
             st.subheader("Ativos Selecionados e Pesos por Ano/Mês")
