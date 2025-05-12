@@ -67,7 +67,7 @@ def otimizar_portfolio_scipy(retornos_df, risk_free_rate=0.02, min_weight=0.01, 
 
 
         {"type": "eq", "fun": lambda x: np.sum(x) - 1} # Soma dos pesos = 1
-    )
+    ]
     bounds = tuple([(min_weight, max_weight) for _ in range(num_assets)])
     initial_guess = num_assets * [1. / num_assets,]
 
