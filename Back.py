@@ -519,10 +519,8 @@ if st.sidebar.button("Iniciar Backtest"):
         st.error("Por favor, insira o ticker do benchmark.")
     else:
         try:
-            datetime.strptime(start_date_str, 
-imazole("%Y-%m-%d"))
-            datetime.strptime(end_date_str, 
-imazole("%Y-%m-%d"))
+            datetime.strptime(start_date_str, "%Y-%m-%d")
+            datetime.strptime(end_date_str, "%Y-%m-%d")
         except ValueError:
             st.error("Formato de data inválido. Use YYYY-MM-DD.")
             st.stop()
