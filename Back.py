@@ -108,22 +108,25 @@ def otimizar_portfolio_scipy(retornos_df, risk_free_rate=0.02, min_weight=0.01, 
         return pd.Series(dtype=float), 0, 0, 0
 
 
-@st.cache_data(ttl=3600) # Cache por 1 hora
+@st.cache_data(ttl=3600)  # Cache por 1 hora
 def obter_dados_historicos_precos_yf(ativos_e_benchmark, start_date_str, end_date_str):
     """Obtém dados de preços de fechamento ajustados do Yahoo Finance."""
     all_data = pd.DataFrame()
     for ticker in ativos_e_benchmark:
         try:
             data = yf.download(ticker, start=start_date_str, end=end_date_str, progress=False)
+            # Checa se há coluna 'Adj Close' e se há ao menos um valor não nulo
             if not data.empty and 'Adj Close' in data.columns and data['Adj Close'].notna().any():
                 all_data[ticker] = data['Adj Close']
             else:
-                st.warning(f"Dados de fechamento ajustado não encontrados para {ticker}. Verifique o ticker ou o período.")
+                st.warning(f"Dados de fechamento ajustado não encontrados para {ticker}. "
+                           "O ativo pode não ter histórico neste período ou o ticker pode estar incorreto.")
         except Exception as e:
             st.error(f"Erro ao baixar dados para {ticker}: {e}")
-    all_data = all_data.dropna(how='all')
+    all_data = all_data.dropna(how='all')  # Remove colunas sem nenhum dado
     if all_data.empty:
-        st.error("Nenhum dado de fechamento ajustado pôde ser obtido para os ativos selecionados.")
+        st.error("Nenhum dado de fechamento ajustado pôde ser obtido para os ativos selecionados. "
+                 "Verifique os tickers e o período informado.")
     return all_data
 
 
