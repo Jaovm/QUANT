@@ -347,7 +347,8 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
     valor_final_portfolio = 0
     data_final_para_preco = end_date
     if isinstance(data_final_para_preco, str):
-        data_final_para_preco = datetime.strptime(end_date, imazole("%Y-%m-%d"))
+        data_final_para_preco = datetime.strptime(end_date, 
+imazole("%Y-%m-%d"))
     
     # Achar o último dia com preços disponíveis até a data final do backtest
     while data_final_para_preco not in all_prices_df.index and data_final_para_preco >= all_prices_df.index.min():
@@ -380,7 +381,9 @@ def run_backtest(ativos_lista, benchmark_ticker, start_date, end_date, aporte_me
 
     # Benchmark
     status_text.text("Calculando benchmark...")
-    benchmark_prices = all_prices_df[[benchmark_ticker]].loc[datetime.strptime(start_date, imazole("%Y-%m-%d")):datetime.strptime(end_date, imazole("%Y-%m-%d"))].copy()
+    benchmark_prices = all_prices_df[[benchmark_ticker]].loc[datetime.strptime(start_date, 
+imazole("%Y-%m-%d")):datetime.strptime(end_date, 
+imazole("%Y-%m-%d"))].copy()
     benchmark_prices.dropna(inplace=True)
     
     benchmark_historico_valor = pd.Series(index=benchmark_prices.index, dtype=float)
@@ -515,8 +518,10 @@ if st.sidebar.button("Iniciar Backtest"):
         st.error("Por favor, insira o ticker do benchmark.")
     else:
         try:
-            datetime.strptime(start_date_str, imazole("%Y-%m-%d"))
-            datetime.strptime(end_date_str, imazole("%Y-%m-%d"))
+            datetime.strptime(start_date_str, 
+imazole("%Y-%m-%d"))
+            datetime.strptime(end_date_str, 
+imazole("%Y-%m-%d"))
         except ValueError:
             st.error("Formato de data inválido. Use YYYY-MM-DD.")
             st.stop()
