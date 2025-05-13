@@ -91,7 +91,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
@@ -121,7 +121,7 @@ if st.button("Executar Backtest Mensal"):
         portfolio['pesos'] = pesos.to_dict()
 
         # Sugerir alocação do novo aporte (função do seu módulo)
-        precos_mes = period_prices.loc[data_aporte, ativos_validos]
+        precos_mes = period_prices.loc[data_aporte if data_aporte in period_prices.index else period_prices.index[period_prices.index.get_loc(data_aporte, method='ffill')], ativos_validos]
         # Calcula valor atual por ativo em R$
         valores_ativos_atuais = {ativo: carteira.get(ativo, 0) * precos_mes[ativo] for ativo in ativos_validos}
         # Calcula quanto investir em cada ativo
@@ -138,11 +138,15 @@ if st.button("Executar Backtest Mensal"):
                 qtd = int(valor_compra // precos_mes[ativo])
                 carteira[ativo] = carteira.get(ativo, 0) + qtd
 
-        # Atualiza patrimônio com preços do fim do mês
-        precos_fim = period_prices.loc[data_fim_mes, ativos_validos]
+        # Atualiza patrimônio com preços do fim do mês (último pregão disponível)
+        if data_fim_mes not in period_prices.index:
+            data_ultima = period_prices.index[period_prices.index.get_loc(data_fim_mes, method='ffill')]
+        else:
+            data_ultima = data_fim_mes
+        precos_fim = period_prices.loc[data_ultima, ativos_validos]
         patrimonio = sum(carteira.get(ativo, 0) * precos_fim[ativo] for ativo in ativos_validos)
         valor_carteira.append(patrimonio)
-        datas_carteira.append(data_fim_mes)
+        datas_carteira.append(data_ultima)
         historico_pesos.append(portfolio['pesos'])
         historico_num_ativos.append(len(ativos_validos))
 
