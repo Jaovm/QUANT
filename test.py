@@ -49,7 +49,7 @@ if st.button("Executar Backtest"):
     
     # Filtro
     st.write("Filtrando ativos (Piotroski ≥ 6 e QuantValue ≥ 6)...")
-    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
+    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
     st.dataframe(selecionados[['ticker', 'Piotroski_F_Score', 'Quant_Value_Score']])
     ativos_validos = selecionados['ticker'].tolist()
     
@@ -61,10 +61,17 @@ if st.button("Executar Backtest"):
     st.write("Baixando preços históricos...")
     start_date = "2024-01-01"
     end_date = datetime.today().strftime("%Y-%m-%d")
-    data = yf.download(ativos_validos + ['BOVA11.SA'], start=start_date, end=end_date)['Adj Close']
+    tickers_yf = ativos_validos + ['BOVA11.SA']
+    data = yf.download(tickers_yf, start=start_date, end=end_date)
     if data.empty:
         st.error("Não foi possível obter preços.")
         st.stop()
+    
+    # Corrige para MultiIndex
+    if isinstance(data.columns, pd.MultiIndex):
+        data = data.xs('Adj Close', axis=1, level=1)
+    else:
+        data = data[['Adj Close']]
     
     data = data.dropna()
     if len(data) < 2:
