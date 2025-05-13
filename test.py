@@ -1,115 +1,162 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime
 import yfinance as yf
-import plotly.graph_objects as go
-
-# Importando funções do seu módulo do repositório
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from financial_analyzer_enhanced_corrected import (
     obter_dados_fundamentalistas_detalhados_br,
     calcular_piotroski_f_score_br,
-    calcular_value_composite_score
+    calcular_value_composite_score,
+    otimizar_portfolio_markowitz_mc,
+    sugerir_alocacao_novo_aporte
 )
 
-st.title('Backtest - Piotroski + Quant Value Score (Long Only) vs BOVA11')
+st.title("Backtest Mensal com Aportes, Markowitz MC e Rebalanceamento Long Only (max 30% por ativo)")
 
-st.markdown("""
-Este painel faz o filtro automático dos ativos usando os scores do modelo do repositório (Piotroski ≥ 6 e Quant Value Score ≥ 6),
-busca os dados via yfinance e compara o resultado com o BOVA11 a partir de 01-01-2024.
-""")
+# Configurações
+valor_aporte = 1000.0
+limite_porc_ativo = 0.3  # 30%
+start_date = pd.to_datetime("2024-01-01")
+end_date = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
 
-# Input do usuário
-tickers_str = st.text_input(
-    "Tickers separados por vírgula (ex: PETR4.SA,VALE3.SA,ITUB4.SA)", 
-    "PETR4.SA,VALE3.SA,ITUB4.SA"
-)
+# Input
+tickers_str = st.text_input("Tickers elegíveis (ex: PETR4.SA,VALE3.SA,ITUB4.SA)", "PETR4.SA,VALE3.SA,ITUB4.SA")
 tickers = [t.strip().upper() for t in tickers_str.split(',') if t.strip()]
 
-if st.button("Executar Backtest"):
+if st.button("Executar Backtest Mensal"):
     if not tickers:
-        st.warning("Inclua pelo menos um ticker.")
+        st.warning("Inclua ao menos um ticker.")
         st.stop()
-        
-    st.write("Obtendo dados fundamentalistas...")
-    df_fund = obter_dados_fundamentalistas_detalhados_br(tickers)
-    if df_fund.empty:
-        st.error("Não foi possível obter dados fundamentalistas.")
-        st.stop()
-    
-    # Calcula scores
-    st.write("Calculando scores...")
-    df_fund['Piotroski_F_Score'] = df_fund.apply(lambda row: calcular_piotroski_f_score_br(row), axis=1)
-    vc_metrics = {
-        'trailingPE': 'lower_is_better', 'priceToBook': 'lower_is_better', 
-        'enterpriseToEbitda': 'lower_is_better', 'dividendYield': 'higher_is_better',
-        'returnOnEquity': 'higher_is_better', 'netMargin': 'higher_is_better'
-    }
-    df_fund['Quant_Value_Score'] = calcular_value_composite_score(df_fund, vc_metrics)
-    
-    # Filtro
-    st.write("Filtrando ativos (Piotroski ≥ 6 e QuantValue ≥ 6)...")
-    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
-    st.dataframe(selecionados[['ticker', 'Piotroski_F_Score', 'Quant_Value_Score']])
-    ativos_validos = selecionados['ticker'].tolist()
-    
-    if not ativos_validos:
-        st.warning("Nenhum ativo passou nos critérios.")
-        st.stop()
-    
-    # Preços históricos
-    st.write("Baixando preços históricos...")
-    start_date = "2024-01-01"
-    end_date = datetime.today().strftime("%Y-%m-%d")
-    tickers_yf = ativos_validos + ['BOVA11.SA']
-    data = yf.download(tickers_yf, start=start_date, end=end_date)
-    st.write("Colunas retornadas:", data.columns)  # debug
+    # Preparação
+    datas_aporte = pd.date_range(start_date, end_date, freq="MS")
+    valor_carteira = []
+    datas_carteira = []
+    alocacao = None
+    pesos_atuais = None
+    patrimonio = 0.0
+    historico_pesos = []
+    historico_num_ativos = []
 
-    # Seleciona a coluna de preço ajustado ou de fechamento
-    price_level = None
-    if isinstance(data.columns, pd.MultiIndex):
-        if 'Adj Close' in data.columns.get_level_values(0):
-            price_level = 'Adj Close'
-        elif 'Close' in data.columns.get_level_values(0):
-            price_level = 'Close'
+    # Histórico dos preços
+    st.write("Baixando preços históricos de todos ativos elegíveis e do benchmark (BOVA11.SA)...")
+    all_tickers = list(set(tickers + ['BOVA11.SA']))
+    precos = yf.download(all_tickers, start=start_date, end=end_date)
+    # Seleção robusta da coluna de preço
+    if isinstance(precos.columns, pd.MultiIndex):
+        if 'Adj Close' in precos.columns.get_level_values(0):
+            precos = precos.xs('Adj Close', axis=1, level=0)
+        elif 'Close' in precos.columns.get_level_values(0):
+            precos = precos.xs('Close', axis=1, level=0)
         else:
-            st.error(f"Nenhuma coluna de preço ('Adj Close' ou 'Close') encontrada! Colunas retornadas: {data.columns}")
+            st.error("Colunas de preço não encontradas!")
             st.stop()
-        data = data.xs(price_level, axis=1, level=0)
     else:
-        if 'Adj Close' in data.columns:
-            data = data[['Adj Close']]
-        elif 'Close' in data.columns:
-            data = data[['Close']]
+        if 'Adj Close' in precos.columns:
+            precos = precos[['Adj Close']]
+        elif 'Close' in precos.columns:
+            precos = precos[['Close']]
         else:
-            st.error(f"Nenhuma coluna de preço ('Adj Close' ou 'Close') encontrada! Colunas retornadas: {data.columns}")
+            st.error("Colunas de preço não encontradas!")
             st.stop()
+    precos = precos.dropna(how='all', axis=0)
 
-    data = data.dropna()
-    if len(data) < 2:
-        st.error("Dados insuficientes para backtest.")
-        st.stop()
-        
-    # Calculando evolução do portfólio (equal weight, rebalanceamento diário)
-    portf = data[ativos_validos].pct_change().dropna().mean(axis=1)
-    portf_cum = (1 + portf).cumprod()
-    bova = data['BOVA11.SA'].pct_change().dropna()
-    bova_cum = (1 + bova).cumprod()
-    
+    # Inicialização
+    carteira = {t: 0 for t in tickers}
+    caixa = 0.0
+
+    for idx, data_aporte in enumerate(datas_aporte):
+        st.write(f"Processando mês: {data_aporte.strftime('%Y-%m')}")
+        # Período para cálculo dos retornos e fundamentos
+        data_fim_mes = data_aporte + relativedelta(months=1) - timedelta(days=1)
+        data_fim_mes = min(data_fim_mes, end_date)
+        period_prices = precos.loc[:data_fim_mes].copy()
+
+        # Recalcula fundamentos e scores
+        df_fund = obter_dados_fundamentalistas_detalhados_br(tickers)
+        if df_fund.empty:
+            st.warning(f"Sem dados fundamentalistas para {data_aporte.strftime('%Y-%m')}. Pulando mês.")
+            valor_carteira.append(patrimonio)
+            datas_carteira.append(data_aporte)
+            continue
+        df_fund['Piotroski_F_Score'] = df_fund.apply(lambda row: calcular_piotroski_f_score_br(row), axis=1)
+        vc_metrics = {
+            'trailingPE': 'lower_is_better', 'priceToBook': 'lower_is_better', 
+            'enterpriseToEbitda': 'lower_is_better', 'dividendYield': 'higher_is_better',
+            'returnOnEquity': 'higher_is_better', 'netMargin': 'higher_is_better'
+        }
+        df_fund['Quant_Value_Score'] = calcular_value_composite_score(df_fund, vc_metrics)
+
+        # Seleciona ativos
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
+        ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
+        if not ativos_validos:
+            st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
+            valor_carteira.append(patrimonio)
+            datas_carteira.append(data_aporte)
+            continue
+
+        # Calcula retornos históricos para otimização (usa últimos 12 meses)
+        lookback_inicio = data_aporte - relativedelta(months=12)
+        lookback_prices = precos.loc[lookback_inicio:data_aporte, ativos_validos].dropna()
+        if len(lookback_prices) < 2:
+            st.warning(f"Dados insuficientes para otimização em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
+            valor_carteira.append(patrimonio)
+            datas_carteira.append(data_aporte)
+            continue
+
+        returns = lookback_prices.pct_change().dropna()
+
+        # Otimização (Markowitz MC, long only, limite 30%)
+        portfolio, _ = otimizar_portfolio_markowitz_mc(
+            ativos_validos, returns, taxa_livre_risco=0.0, 
+            restricao_long_only=True, restricao_max_por_ativo=limite_porc_ativo
+        )
+        if not portfolio or not portfolio.get('pesos'):
+            st.warning(f"Otimização falhou em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
+            valor_carteira.append(patrimonio)
+            datas_carteira.append(data_aporte)
+            continue
+
+        # Sugerir alocação do novo aporte (função do seu módulo)
+        aportes = sugerir_alocacao_novo_aporte(
+            carteira_atual=carteira, pesos_otimizados=portfolio['pesos'], 
+            valor_aporte=valor_aporte, precos_atuais=period_prices.loc[data_aporte, ativos_validos]
+        )
+
+        # Atualiza quantidades da carteira
+        for ativo, qtd in aportes.items():
+            if ativo not in carteira:
+                carteira[ativo] = 0
+            carteira[ativo] += qtd
+
+        # Atualiza patrimônio com preços do fim do mês
+        patrimonio = sum(carteira[ativo] * period_prices.loc[data_fim_mes, ativo] for ativo in ativos_validos if ativo in carteira)
+        valor_carteira.append(patrimonio)
+        datas_carteira.append(data_fim_mes)
+        historico_pesos.append(portfolio['pesos'])
+        historico_num_ativos.append(len(ativos_validos))
+
+    # Benchmark
+    bova11 = precos['BOVA11.SA'].loc[datas_carteira]
+    bova11 = bova11 / bova11.iloc[0] * (valor_aporte)  # Simula mesmo aporte inicial
+
     # Gráfico
-    st.subheader("Evolução do Portfólio vs BOVA11")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=portf_cum.index, y=portf_cum, name='Portfólio Quant'))
-    fig.add_trace(go.Scatter(x=bova_cum.index, y=bova_cum, name='BOVA11'))
-    fig.update_layout(title="Crescimento do capital (base 1.0)", yaxis_title="Evolução", xaxis_title="Data")
-    st.plotly_chart(fig)
-    
-    # CAGR
-    n_years = (portf_cum.index[-1] - portf_cum.index[0]).days / 365.25
-    portf_cagr = portf_cum[-1] ** (1/n_years) - 1
-    bova_cagr = bova_cum[-1] ** (1/n_years) - 1
-    st.metric("CAGR Portfólio", f"{portf_cagr:.2%}")
-    st.metric("CAGR BOVA11", f"{bova_cagr:.2%}")
-    st.success("Backtest concluído! Veja o gráfico e as métricas acima.")
+    df_result = pd.DataFrame({'Carteira Quant': valor_carteira, 'BOVA11': bova11.values}, index=datas_carteira)
+    st.line_chart(df_result)
 
-st.caption("Código baseado no modelo e funções do repositório Jaovm/QUANT.")
+    st.write("Evolução da carteira e benchmark")
+    st.write(df_result)
+
+    # Métricas finais
+    n_years = (df_result.index[-1] - df_result.index[0]).days / 365.25
+    carteira_cagr = (df_result['Carteira Quant'].iloc[-1] / (valor_aporte * len(datas_aporte))) ** (1/n_years) - 1
+    bova_cagr = (df_result['BOVA11'].iloc[-1] / (valor_aporte * len(datas_aporte))) ** (1/n_years) - 1
+    st.metric("CAGR Carteira Quant", f"{carteira_cagr:.2%}")
+    st.metric("CAGR BOVA11", f"{bova_cagr:.2%}")
+
+    st.write("Número de ativos por mês:", historico_num_ativos)
+    st.write("Pesos por mês:", historico_pesos)
+    st.success("Backtest mensal com aportes e rebalanceamento concluído!")
+
+st.caption("Backtest mensal, rebalanceando e aportando usando funções Markowitz MC e alocação do repositório Jaovm/QUANT. Limite de 30% por ativo, long only, Piotroski e Quant Score recalculados mensalmente.")
