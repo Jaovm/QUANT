@@ -90,7 +90,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 0.6)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
@@ -147,12 +147,26 @@ if st.button("Executar Backtest Mensal"):
         historico_pesos.append(portfolio['pesos'])
         historico_num_ativos.append(len(ativos_validos))
 
-    # Benchmark
-    bova11 = precos['BOVA11.SA'].reindex(datas_carteira).fillna(method="ffill")
-    bova11 = bova11 / bova11.iloc[0] * valor_aporte  # Simula mesmo aporte inicial
+    # Simular aportes mensais no BOVA11 (benchmark DCA)
+    bova11_prices = precos['BOVA11.SA']
+    bova11_quantidade = 0
+    bova11_patrimonio = []
 
-    # Gráfico
-    df_result = pd.DataFrame({'Carteira Quant': valor_carteira, 'BOVA11': bova11.values}, index=datas_carteira)
+    for dt in datas_carteira:
+        preco = bova11_prices.asof(dt)
+        if np.isnan(preco):
+            bova11_patrimonio.append(np.nan)
+            continue
+        qtd_comprada = valor_aporte // preco
+        bova11_quantidade += qtd_comprada
+        patrimonio_bova = bova11_quantidade * preco
+        bova11_patrimonio.append(patrimonio_bova)
+
+    df_result = pd.DataFrame({
+        'Carteira Quant': valor_carteira,
+        'BOVA11': bova11_patrimonio
+    }, index=datas_carteira)
+
     st.line_chart(df_result)
 
     st.write("Evolução da carteira e benchmark")
