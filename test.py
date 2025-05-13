@@ -49,7 +49,7 @@ if st.button("Executar Backtest"):
     
     # Filtro
     st.write("Filtrando ativos (Piotroski ≥ 6 e QuantValue ≥ 6)...")
-    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
+    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 0,6)]
     st.dataframe(selecionados[['ticker', 'Piotroski_F_Score', 'Quant_Value_Score']])
     ativos_validos = selecionados['ticker'].tolist()
     
