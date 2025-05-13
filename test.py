@@ -86,7 +86,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund['Quant_Value_Score'] = calcular_value_composite_score(df_fund, vc_metrics)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 0.5)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
@@ -113,24 +113,29 @@ if st.button("Executar Backtest Mensal"):
         pesos = pd.Series(portfolio['pesos'])
         pesos = pesos.clip(upper=limite_porc_ativo)
         pesos = pesos / pesos.sum()
-        portfolio['pesos'] = pesos
+        portfolio['pesos'] = pesos.to_dict()
 
         # Sugerir alocação do novo aporte (função do seu módulo)
         precos_mes = period_prices.loc[data_aporte, ativos_validos]
+        # Calcula valor atual por ativo em R$
+        valores_ativos_atuais = {ativo: carteira.get(ativo, 0) * precos_mes[ativo] for ativo in ativos_validos}
+        # Calcula quanto investir em cada ativo
         aportes = sugerir_alocacao_novo_aporte(
-            carteira_atual=carteira, pesos_otimizados=portfolio['pesos'], 
-            valor_aporte=valor_aporte, precos_atuais=precos_mes
+            current_portfolio_composition_values=valores_ativos_atuais,
+            new_capital=valor_aporte,
+            target_portfolio_weights_decimal=portfolio['pesos']
         )
 
-        # Atualiza quantidades da carteira
-        for ativo, qtd in aportes.items():
-            if ativo not in carteira:
-                carteira[ativo] = 0
-            carteira[ativo] += qtd
+        # Atualiza quantidades da carteira (compras a mercado)
+        for ativo in ativos_validos:
+            valor_compra = aportes.get(ativo, 0)
+            if valor_compra > 0 and precos_mes[ativo] > 0:
+                qtd = int(valor_compra // precos_mes[ativo])
+                carteira[ativo] = carteira.get(ativo, 0) + qtd
 
         # Atualiza patrimônio com preços do fim do mês
         precos_fim = period_prices.loc[data_fim_mes, ativos_validos]
-        patrimonio = sum(carteira[ativo] * precos_fim[ativo] for ativo in ativos_validos if ativo in carteira)
+        patrimonio = sum(carteira.get(ativo, 0) * precos_fim[ativo] for ativo in ativos_validos)
         valor_carteira.append(patrimonio)
         datas_carteira.append(data_fim_mes)
         historico_pesos.append(portfolio['pesos'])
