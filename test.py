@@ -85,13 +85,12 @@ if st.button("Executar Backtest Mensal"):
         }
         # Garante que retorna uma Series numérica
         quant_value_score = calcular_value_composite_score(df_fund, vc_metrics)
-        # Se retornar lista, vira Series
         if not isinstance(quant_value_score, pd.Series):
             quant_value_score = pd.Series(quant_value_score, index=df_fund.index)
         df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 3) & (df_fund['Quant_Value_Score'] >= 0.5)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
@@ -121,10 +120,11 @@ if st.button("Executar Backtest Mensal"):
         portfolio['pesos'] = pesos.to_dict()
 
         # Sugerir alocação do novo aporte (função do seu módulo)
-        precos_mes = period_prices.loc[data_aporte if data_aporte in period_prices.index else period_prices.index[period_prices.index.get_loc(data_aporte, method='ffill')], ativos_validos]
-        # Calcula valor atual por ativo em R$
+        if data_aporte in period_prices.index:
+            precos_mes = period_prices.loc[data_aporte, ativos_validos]
+        else:
+            precos_mes = period_prices.loc[period_prices.index.asof(data_aporte), ativos_validos]
         valores_ativos_atuais = {ativo: carteira.get(ativo, 0) * precos_mes[ativo] for ativo in ativos_validos}
-        # Calcula quanto investir em cada ativo
         aportes, _ = sugerir_alocacao_novo_aporte(
             current_portfolio_composition_values=valores_ativos_atuais,
             new_capital=valor_aporte,
@@ -139,10 +139,7 @@ if st.button("Executar Backtest Mensal"):
                 carteira[ativo] = carteira.get(ativo, 0) + qtd
 
         # Atualiza patrimônio com preços do fim do mês (último pregão disponível)
-        if data_fim_mes not in period_prices.index:
-            data_ultima = period_prices.index[period_prices.index.get_loc(data_fim_mes, method='ffill')]
-        else:
-            data_ultima = data_fim_mes
+        data_ultima = period_prices.index.asof(data_fim_mes)
         precos_fim = period_prices.loc[data_ultima, ativos_validos]
         patrimonio = sum(carteira.get(ativo, 0) * precos_fim[ativo] for ativo in ativos_validos)
         valor_carteira.append(patrimonio)
