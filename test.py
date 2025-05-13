@@ -32,11 +32,9 @@ if st.button("Executar Backtest Mensal"):
     datas_aporte = pd.date_range(start_date, end_date, freq="MS")
     valor_carteira = []
     datas_carteira = []
-    alocacao = None
-    pesos_atuais = None
-    patrimonio = 0.0
     historico_pesos = []
     historico_num_ativos = []
+    patrimonio = 0.0
 
     # Histórico dos preços
     st.write("Baixando preços históricos de todos ativos elegíveis e do benchmark (BOVA11.SA)...")
@@ -88,7 +86,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund['Quant_Value_Score'] = calcular_value_composite_score(df_fund, vc_metrics)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
@@ -107,21 +105,21 @@ if st.button("Executar Backtest Mensal"):
 
         returns = lookback_prices.pct_change().dropna()
 
-        # Otimização (Markowitz MC, long only, limite 30%)
+        # Otimização (Markowitz MC)
         portfolio, _ = otimizar_portfolio_markowitz_mc(
-            ativos_validos, returns, taxa_livre_risco=0.0, 
-            restricao_long_only=True, restricao_max_por_ativo=limite_porc_ativo
+            ativos_validos, returns, taxa_livre_risco=0.0
         )
-        if not portfolio or not portfolio.get('pesos'):
-            st.warning(f"Otimização falhou em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
-            valor_carteira.append(patrimonio)
-            datas_carteira.append(data_aporte)
-            continue
+        # Limita a 30% por ativo e normaliza
+        pesos = pd.Series(portfolio['pesos'])
+        pesos = pesos.clip(upper=limite_porc_ativo)
+        pesos = pesos / pesos.sum()
+        portfolio['pesos'] = pesos
 
         # Sugerir alocação do novo aporte (função do seu módulo)
+        precos_mes = period_prices.loc[data_aporte, ativos_validos]
         aportes = sugerir_alocacao_novo_aporte(
             carteira_atual=carteira, pesos_otimizados=portfolio['pesos'], 
-            valor_aporte=valor_aporte, precos_atuais=period_prices.loc[data_aporte, ativos_validos]
+            valor_aporte=valor_aporte, precos_atuais=precos_mes
         )
 
         # Atualiza quantidades da carteira
@@ -131,15 +129,16 @@ if st.button("Executar Backtest Mensal"):
             carteira[ativo] += qtd
 
         # Atualiza patrimônio com preços do fim do mês
-        patrimonio = sum(carteira[ativo] * period_prices.loc[data_fim_mes, ativo] for ativo in ativos_validos if ativo in carteira)
+        precos_fim = period_prices.loc[data_fim_mes, ativos_validos]
+        patrimonio = sum(carteira[ativo] * precos_fim[ativo] for ativo in ativos_validos if ativo in carteira)
         valor_carteira.append(patrimonio)
         datas_carteira.append(data_fim_mes)
         historico_pesos.append(portfolio['pesos'])
         historico_num_ativos.append(len(ativos_validos))
 
     # Benchmark
-    bova11 = precos['BOVA11.SA'].loc[datas_carteira]
-    bova11 = bova11 / bova11.iloc[0] * (valor_aporte)  # Simula mesmo aporte inicial
+    bova11 = precos['BOVA11.SA'].reindex(datas_carteira).fillna(method="ffill")
+    bova11 = bova11 / bova11.iloc[0] * valor_aporte  # Simula mesmo aporte inicial
 
     # Gráfico
     df_result = pd.DataFrame({'Carteira Quant': valor_carteira, 'BOVA11': bova11.values}, index=datas_carteira)
@@ -150,8 +149,9 @@ if st.button("Executar Backtest Mensal"):
 
     # Métricas finais
     n_years = (df_result.index[-1] - df_result.index[0]).days / 365.25
-    carteira_cagr = (df_result['Carteira Quant'].iloc[-1] / (valor_aporte * len(datas_aporte))) ** (1/n_years) - 1
-    bova_cagr = (df_result['BOVA11'].iloc[-1] / (valor_aporte * len(datas_aporte))) ** (1/n_years) - 1
+    total_aportado = valor_aporte * len(datas_aporte)
+    carteira_cagr = (df_result['Carteira Quant'].iloc[-1] / total_aportado) ** (1/n_years) - 1
+    bova_cagr = (df_result['BOVA11'].iloc[-1] / total_aportado) ** (1/n_years) - 1
     st.metric("CAGR Carteira Quant", f"{carteira_cagr:.2%}")
     st.metric("CAGR BOVA11", f"{bova_cagr:.2%}")
 
