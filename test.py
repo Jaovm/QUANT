@@ -77,16 +77,21 @@ if st.button("Executar Backtest Mensal"):
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
             continue
-        df_fund['Piotroski_F_Score'] = df_fund.apply(lambda row: calcular_piotroski_f_score_br(row), axis=1)
+        df_fund['Piotroski_F_Score'] = df_fund.apply(lambda row: float(calcular_piotroski_f_score_br(row)), axis=1)
         vc_metrics = {
             'trailingPE': 'lower_is_better', 'priceToBook': 'lower_is_better', 
             'enterpriseToEbitda': 'lower_is_better', 'dividendYield': 'higher_is_better',
             'returnOnEquity': 'higher_is_better', 'netMargin': 'higher_is_better'
         }
-        df_fund['Quant_Value_Score'] = calcular_value_composite_score(df_fund, vc_metrics)
+        # Garante que retorna uma Series numérica
+        quant_value_score = calcular_value_composite_score(df_fund, vc_metrics)
+        # Se retornar lista, vira Series
+        if not isinstance(quant_value_score, pd.Series):
+            quant_value_score = pd.Series(quant_value_score, index=df_fund.index)
+        df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0,6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
@@ -120,7 +125,7 @@ if st.button("Executar Backtest Mensal"):
         # Calcula valor atual por ativo em R$
         valores_ativos_atuais = {ativo: carteira.get(ativo, 0) * precos_mes[ativo] for ativo in ativos_validos}
         # Calcula quanto investir em cada ativo
-        aportes = sugerir_alocacao_novo_aporte(
+        aportes, _ = sugerir_alocacao_novo_aporte(
             current_portfolio_composition_values=valores_ativos_atuais,
             new_capital=valor_aporte,
             target_portfolio_weights_decimal=portfolio['pesos']
