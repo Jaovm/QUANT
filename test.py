@@ -5,7 +5,7 @@ from datetime import datetime
 import yfinance as yf
 import plotly.graph_objects as go
 
-# Importando funções do seu módulo
+# Importando funções do seu módulo do repositório
 from financial_analyzer_enhanced_corrected import (
     obter_dados_fundamentalistas_detalhados_br,
     calcular_piotroski_f_score_br,
@@ -49,7 +49,7 @@ if st.button("Executar Backtest"):
     
     # Filtro
     st.write("Filtrando ativos (Piotroski ≥ 6 e QuantValue ≥ 6)...")
-    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 0.6)]
+    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
     st.dataframe(selecionados[['ticker', 'Piotroski_F_Score', 'Quant_Value_Score']])
     ativos_validos = selecionados['ticker'].tolist()
     
@@ -63,16 +63,22 @@ if st.button("Executar Backtest"):
     end_date = datetime.today().strftime("%Y-%m-%d")
     tickers_yf = ativos_validos + ['BOVA11.SA']
     data = yf.download(tickers_yf, start=start_date, end=end_date)
-    if data.empty:
-        st.error("Não foi possível obter preços.")
-        st.stop()
+    st.write("Colunas retornadas:", data.columns)  # debug
     
-    # Corrige para MultiIndex
+    # Corrige para MultiIndex ou coluna simples
     if isinstance(data.columns, pd.MultiIndex):
-        data = data.xs('Adj Close', axis=1, level=1)
+        if 'Adj Close' in data.columns.get_level_values(1):
+            data = data.xs('Adj Close', axis=1, level=1)
+        else:
+            st.error(f"'Adj Close' não encontrado nas colunas! Colunas retornadas: {data.columns}")
+            st.stop()
     else:
-        data = data[['Adj Close']]
-    
+        if 'Adj Close' in data.columns:
+            data = data[['Adj Close']]
+        else:
+            st.error(f"'Adj Close' não encontrado nas colunas! Colunas retornadas: {data.columns}")
+            st.stop()
+
     data = data.dropna()
     if len(data) < 2:
         st.error("Dados insuficientes para backtest.")
