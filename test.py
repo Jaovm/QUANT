@@ -88,7 +88,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund['Quant_Value_Score'] = calcular_value_composite_score(df_fund, vc_metrics)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
