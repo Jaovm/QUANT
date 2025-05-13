@@ -17,7 +17,7 @@ st.title("Backtest Mensal com Aportes, Markowitz MC e Rebalanceamento Long Only 
 # Configurações
 valor_aporte = 1000.0
 limite_porc_ativo = 0.3  # 30%
-start_date = pd.to_datetime("2024-01-01")
+start_date = pd.to_datetime("2024-03-01")
 end_date = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
 
 # Input
