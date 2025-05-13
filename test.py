@@ -49,7 +49,7 @@ if st.button("Executar Backtest"):
     
     # Filtro
     st.write("Filtrando ativos (Piotroski ≥ 6 e QuantValue ≥ 6)...")
-    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
+    selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
     st.dataframe(selecionados[['ticker', 'Piotroski_F_Score', 'Quant_Value_Score']])
     ativos_validos = selecionados['ticker'].tolist()
     
@@ -64,19 +64,25 @@ if st.button("Executar Backtest"):
     tickers_yf = ativos_validos + ['BOVA11.SA']
     data = yf.download(tickers_yf, start=start_date, end=end_date)
     st.write("Colunas retornadas:", data.columns)  # debug
-    
-    # Corrige para MultiIndex ou coluna simples
+
+    # Seleciona a coluna de preço ajustado ou de fechamento
+    price_level = None
     if isinstance(data.columns, pd.MultiIndex):
-        if 'Adj Close' in data.columns.get_level_values(1):
-            data = data.xs('Adj Close', axis=1, level=1)
+        if 'Adj Close' in data.columns.get_level_values(0):
+            price_level = 'Adj Close'
+        elif 'Close' in data.columns.get_level_values(0):
+            price_level = 'Close'
         else:
-            st.error(f"'Adj Close' não encontrado nas colunas! Colunas retornadas: {data.columns}")
+            st.error(f"Nenhuma coluna de preço ('Adj Close' ou 'Close') encontrada! Colunas retornadas: {data.columns}")
             st.stop()
+        data = data.xs(price_level, axis=1, level=0)
     else:
         if 'Adj Close' in data.columns:
             data = data[['Adj Close']]
+        elif 'Close' in data.columns:
+            data = data[['Close']]
         else:
-            st.error(f"'Adj Close' não encontrado nas colunas! Colunas retornadas: {data.columns}")
+            st.error(f"Nenhuma coluna de preço ('Adj Close' ou 'Close') encontrada! Colunas retornadas: {data.columns}")
             st.stop()
 
     data = data.dropna()
