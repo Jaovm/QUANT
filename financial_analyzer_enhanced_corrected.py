@@ -241,10 +241,25 @@ def obter_dados_fundamentalistas_detalhados_br(ativos):
             df_fund[col] = pd.to_numeric(df_fund[col], errors='coerce')
     return df_fund
 
+import pandas as pd
+import numpy as np
+
+def _get_numeric_value(row, keys):
+    """
+    Tenta extrair um valor numérico de uma lista de possíveis chaves em uma Series/DataFrame.
+    Retorna np.nan se não encontrar.
+    """
+    for key in keys:
+        if key in row and pd.notna(row[key]):
+            try:
+                return float(row[key])
+            except Exception:
+                continue
+    return np.nan
+
 def calcular_piotroski_f_score_br(row, verbose=False):
     """
-    Calcula o Piotroski F-Score e retorna score e detalhamento dos critérios para empresas brasileiras.
-    Revisado para maior robustez e clareza, conforme solicitado.
+    Calcula o Piotroski F-Score para empresas brasileiras (ou internacionais, se os campos forem equivalentes).
     Parâmetros:
         row: linha do dataframe de fundamentos (Pandas Series).
         verbose: se True, retorna score, dict de critérios e dict de valores intermediários.
@@ -255,95 +270,58 @@ def calcular_piotroski_f_score_br(row, verbose=False):
     # --- Rentabilidade ---
     # 1. Lucro Líquido positivo (ROA_SCORE)
     lucro_liquido_atual = _get_numeric_value(row, ['lucro_liquido_atual', 'netIncomeToCommon', 'netIncome', 'NetIncome_curr', 'NI_curr'])
-    debug_valores['lucro_liquido_atual'] = lucro_liquido_atual
     criterios['lucro_liquido_positivo'] = 1 if pd.notna(lucro_liquido_atual) and lucro_liquido_atual > 0 else 0
+    debug_valores['lucro_liquido_atual'] = lucro_liquido_atual
 
     # 2. Fluxo de Caixa Operacional positivo (CFO_SCORE)
     cfo_atual = _get_numeric_value(row, ['cfo_atual', 'operatingCashflow', 'totalCashFromOperatingActivities', 'CFO_curr'])
-    debug_valores['cfo_atual'] = cfo_atual
     criterios['cfo_positivo'] = 1 if pd.notna(cfo_atual) and cfo_atual > 0 else 0
+    debug_valores['cfo_atual'] = cfo_atual
 
     # 3. ROA crescente (DELTA_ROA_SCORE)
     ativos_totais_atual = _get_numeric_value(row, ['ativos_totais_atual', 'totalAssets', 'TotalAssets_curr'])
     ativos_totais_anterior = _get_numeric_value(row, ['ativos_totais_anterior', 'TotalAssets_prev'])
     lucro_liquido_anterior = _get_numeric_value(row, ['lucro_liquido_anterior', 'NetIncome_prev', 'NI_prev'])
-    debug_valores.update({'ativos_totais_atual': ativos_totais_atual, 'ativos_totais_anterior': ativos_totais_anterior, 'lucro_liquido_anterior': lucro_liquido_anterior})
 
-    roa_atual, roa_anterior = np.nan, np.nan
-    try:
-        if pd.notna(lucro_liquido_atual) and pd.notna(ativos_totais_atual) and ativos_totais_atual != 0:
-            roa_atual = lucro_liquido_atual / ativos_totais_atual
-    except Exception: roa_atual = np.nan
-    try:
-        if pd.notna(lucro_liquido_anterior) and pd.notna(ativos_totais_anterior) and ativos_totais_anterior != 0:
-            roa_anterior = lucro_liquido_anterior / ativos_totais_anterior
-    except Exception: roa_anterior = np.nan
-    debug_valores.update({'roa_atual': roa_atual, 'roa_anterior': roa_anterior})
+    roa_atual = lucro_liquido_atual / ativos_totais_atual if pd.notna(lucro_liquido_atual) and pd.notna(ativos_totais_atual) and ativos_totais_atual != 0 else np.nan
+    roa_anterior = lucro_liquido_anterior / ativos_totais_anterior if pd.notna(lucro_liquido_anterior) and pd.notna(ativos_totais_anterior) and ativos_totais_anterior != 0 else np.nan
     criterios['roa_crescente'] = 1 if pd.notna(roa_atual) and pd.notna(roa_anterior) and roa_atual > roa_anterior else 0
+    debug_valores.update({'ativos_totais_atual': ativos_totais_atual, 'ativos_totais_anterior': ativos_totais_anterior, 'lucro_liquido_anterior': lucro_liquido_anterior, 'roa_atual': roa_atual, 'roa_anterior': roa_anterior})
 
     # 4. Qualidade do Lucro: CFO > Lucro Líquido (ACCRUAL_SCORE)
     criterios['cfo_maior_que_lucro'] = 1 if pd.notna(cfo_atual) and pd.notna(lucro_liquido_atual) and cfo_atual > lucro_liquido_atual else 0
 
     # --- Alavancagem, Liquidez e Fontes de Financiamento ---
     # 5. Queda da dívida de longo prazo (DELTA_LEVER_SCORE)
-    # (Dívida LP / Ativos Totais)_atual < (Dívida LP / Ativos Totais)_anterior
     divida_lp_atual = _get_numeric_value(row, ['divida_lp_atual', 'longTermDebt', 'LongTermDebt_curr'])
     divida_lp_anterior = _get_numeric_value(row, ['divida_lp_anterior', 'LongTermDebt_prev'])
-    debug_valores.update({'divida_lp_atual': divida_lp_atual, 'divida_lp_anterior': divida_lp_anterior})
 
-    leverage_atual, leverage_anterior = np.nan, np.nan
-    try:
-        if pd.notna(divida_lp_atual) and pd.notna(ativos_totais_atual) and ativos_totais_atual != 0:
-            leverage_atual = divida_lp_atual / ativos_totais_atual
-    except Exception: leverage_atual = np.nan
-    try:
-        if pd.notna(divida_lp_anterior) and pd.notna(ativos_totais_anterior) and ativos_totais_anterior != 0:
-            leverage_anterior = divida_lp_anterior / ativos_totais_anterior
-    except Exception: leverage_anterior = np.nan
-    debug_valores.update({'leverage_atual': leverage_atual, 'leverage_anterior': leverage_anterior})
-    
-    criterios['queda_divida_lp'] = 0
-    if pd.notna(leverage_atual) and pd.notna(leverage_anterior):
-        if leverage_atual < leverage_anterior:
-            criterios['queda_divida_lp'] = 1
-    elif pd.notna(leverage_atual) and leverage_atual == 0: # No long-term debt now
-        criterios['queda_divida_lp'] = 1 # Considered positive if current leverage is zero
-    elif pd.isna(leverage_atual) and pd.notna(leverage_anterior) and leverage_anterior == 0: # No debt before, no info now
-        criterios['queda_divida_lp'] = 1 # If it was zero and now is NaN, assume it's still zero or better
+    leverage_atual = divida_lp_atual / ativos_totais_atual if pd.notna(divida_lp_atual) and pd.notna(ativos_totais_atual) and ativos_totais_atual != 0 else np.nan
+    leverage_anterior = divida_lp_anterior / ativos_totais_anterior if pd.notna(divida_lp_anterior) and pd.notna(ativos_totais_anterior) and ativos_totais_anterior != 0 else np.nan
+
+    # Só pontua se ambos são válidos e há queda
+    criterios['queda_divida_lp'] = 1 if pd.notna(leverage_atual) and pd.notna(leverage_anterior) and leverage_atual < leverage_anterior else 0
+    debug_valores.update({'divida_lp_atual': divida_lp_atual, 'divida_lp_anterior': divida_lp_anterior, 'leverage_atual': leverage_atual, 'leverage_anterior': leverage_anterior})
 
     # 6. Aumento do índice de liquidez corrente (DELTA_LIQUID_SCORE)
     ativos_circulantes_atual = _get_numeric_value(row, ['ativos_circulantes_atual', 'totalCurrentAssets', 'CurrentAssets_curr'])
     passivos_circulantes_atual = _get_numeric_value(row, ['passivos_circulantes_atual', 'totalCurrentLiabilities', 'CurrentLiab_curr'])
     ativos_circulantes_anterior = _get_numeric_value(row, ['ativos_circulantes_anterior', 'CurrentAssets_prev'])
     passivos_circulantes_anterior = _get_numeric_value(row, ['passivos_circulantes_anterior', 'CurrentLiab_prev'])
-    debug_valores.update({'ativos_circ_atual': ativos_circulantes_atual, 'passivos_circ_atual': passivos_circulantes_atual, 
-                           'ativos_circ_ant': ativos_circulantes_anterior, 'passivos_circ_ant': passivos_circulantes_anterior})
 
-    liquidez_corrente_atual, liquidez_corrente_anterior = np.nan, np.nan
-    try:
-        if pd.notna(ativos_circulantes_atual) and pd.notna(passivos_circulantes_atual) and passivos_circulantes_atual != 0:
-            liquidez_corrente_atual = ativos_circulantes_atual / passivos_circulantes_atual
-    except Exception: liquidez_corrente_atual = np.nan
-    try:
-        if pd.notna(ativos_circulantes_anterior) and pd.notna(passivos_circulantes_anterior) and passivos_circulantes_anterior != 0:
-            liquidez_corrente_anterior = ativos_circulantes_anterior / passivos_circulantes_anterior
-    except Exception: liquidez_corrente_anterior = np.nan
-    debug_valores.update({'liquidez_corr_atual': liquidez_corrente_atual, 'liquidez_corr_anterior': liquidez_corrente_anterior})
+    liquidez_corrente_atual = ativos_circulantes_atual / passivos_circulantes_atual if pd.notna(ativos_circulantes_atual) and pd.notna(passivos_circulantes_atual) and passivos_circulantes_atual != 0 else np.nan
+    liquidez_corrente_anterior = ativos_circulantes_anterior / passivos_circulantes_anterior if pd.notna(ativos_circulantes_anterior) and pd.notna(passivos_circulantes_anterior) and passivos_circulantes_anterior != 0 else np.nan
     criterios['aumento_liquidez_corrente'] = 1 if pd.notna(liquidez_corrente_atual) and pd.notna(liquidez_corrente_anterior) and liquidez_corrente_atual > liquidez_corrente_anterior else 0
+    debug_valores.update({'ativos_circ_atual': ativos_circulantes_atual, 'passivos_circ_atual': passivos_circulantes_atual, 
+                          'ativos_circ_ant': ativos_circulantes_anterior, 'passivos_circ_ant': passivos_circulantes_anterior,
+                          'liquidez_corr_atual': liquidez_corrente_atual, 'liquidez_corr_anterior': liquidez_corrente_anterior})
 
     # 7. Não emissão de ações (EQ_OFFER_SCORE)
-    # Ideal: Common Shares Outstanding. yfinance `sharesOutstanding` is usually TTM/current.
-    # `sharesOutstanding_from_bs_curr` and `sharesOutstanding_from_bs_prev` are proxies from balance sheet.
     acoes_emitidas_atual = _get_numeric_value(row, ['sharesOutstanding', 'acoes_emitidas_atual', 'sharesOutstanding_from_bs_curr'])
     acoes_emitidas_anterior = _get_numeric_value(row, ['sharesOutstanding_prev', 'acoes_emitidas_anterior', 'sharesOutstanding_from_bs_prev'])
-    debug_valores.update({'acoes_emitidas_atual': acoes_emitidas_atual, 'acoes_emitidas_anterior': acoes_emitidas_anterior})
 
-    criterios['nao_emitiu_acoes'] = 0
-    if pd.notna(acoes_emitidas_atual) and pd.notna(acoes_emitidas_anterior):
-        if acoes_emitidas_atual <= acoes_emitidas_anterior: # No dilution or buyback
-            criterios['nao_emitiu_acoes'] = 1
-    # If previous is NaN but current is available, we cannot make a comparison for change.
-    # Piotroski implies a comparison, so 0 points if prior year data is missing.
+    criterios['nao_emitiu_acoes'] = 1 if pd.notna(acoes_emitidas_atual) and pd.notna(acoes_emitidas_anterior) and acoes_emitidas_atual <= acoes_emitidas_anterior else 0
+    debug_valores.update({'acoes_emitidas_atual': acoes_emitidas_atual, 'acoes_emitidas_anterior': acoes_emitidas_anterior})
 
     # --- Eficiência Operacional ---
     # 8. Aumento da margem bruta (DELTA_MARGIN_SCORE)
@@ -351,44 +329,28 @@ def calcular_piotroski_f_score_br(row, verbose=False):
     receita_liquida_atual = _get_numeric_value(row, ['receita_liquida_atual', 'totalRevenue', 'Revenue_curr'])
     lucro_bruto_anterior = _get_numeric_value(row, ['lucro_bruto_anterior', 'GrossProfit_prev'])
     receita_liquida_anterior = _get_numeric_value(row, ['receita_liquida_anterior', 'Revenue_prev'])
-    debug_valores.update({'lucro_bruto_atual': lucro_bruto_atual, 'receita_liquida_atual': receita_liquida_atual, 
-                           'lucro_bruto_anterior': lucro_bruto_anterior, 'receita_liquida_anterior': receita_liquida_anterior})
-    
-    margem_bruta_atual, margem_bruta_anterior = np.nan, np.nan
-    # Prioritize directly provided margin if available
     margem_bruta_atual_direta = _get_numeric_value(row, ['margem_bruta_atual', 'grossMargins', 'GrossMargin_curr'])
     margem_bruta_anterior_direta = _get_numeric_value(row, ['margem_bruta_anterior', 'GrossMargin_prev'])
 
     if pd.notna(margem_bruta_atual_direta):
         margem_bruta_atual = margem_bruta_atual_direta
     else:
-        try:
-            if pd.notna(lucro_bruto_atual) and pd.notna(receita_liquida_atual) and receita_liquida_atual != 0:
-                margem_bruta_atual = lucro_bruto_atual / receita_liquida_atual
-        except Exception: margem_bruta_atual = np.nan
-            
+        margem_bruta_atual = lucro_bruto_atual / receita_liquida_atual if pd.notna(lucro_bruto_atual) and pd.notna(receita_liquida_atual) and receita_liquida_atual != 0 else np.nan
     if pd.notna(margem_bruta_anterior_direta):
         margem_bruta_anterior = margem_bruta_anterior_direta
     else:
-        try:
-            if pd.notna(lucro_bruto_anterior) and pd.notna(receita_liquida_anterior) and receita_liquida_anterior != 0:
-                margem_bruta_anterior = lucro_bruto_anterior / receita_liquida_anterior
-        except Exception: margem_bruta_anterior = np.nan
-    debug_valores.update({'margem_bruta_atual': margem_bruta_atual, 'margem_bruta_anterior': margem_bruta_anterior})
+        margem_bruta_anterior = lucro_bruto_anterior / receita_liquida_anterior if pd.notna(lucro_bruto_anterior) and pd.notna(receita_liquida_anterior) and receita_liquida_anterior != 0 else np.nan
+
     criterios['aumento_margem_bruta'] = 1 if pd.notna(margem_bruta_atual) and pd.notna(margem_bruta_anterior) and margem_bruta_atual > margem_bruta_anterior else 0
+    debug_valores.update({'lucro_bruto_atual': lucro_bruto_atual, 'receita_liquida_atual': receita_liquida_atual, 
+                          'lucro_bruto_anterior': lucro_bruto_anterior, 'receita_liquida_anterior': receita_liquida_anterior,
+                          'margem_bruta_atual': margem_bruta_atual, 'margem_bruta_anterior': margem_bruta_anterior})
 
     # 9. Aumento da rotatividade de ativos (DELTA_ASSET_TURN_SCORE)
-    rot_ativos_atual, rot_ativos_anterior = np.nan, np.nan
-    try:
-        if pd.notna(receita_liquida_atual) and pd.notna(ativos_totais_atual) and ativos_totais_atual != 0:
-            rot_ativos_atual = receita_liquida_atual / ativos_totais_atual
-    except Exception: rot_ativos_atual = np.nan
-    try:
-        if pd.notna(receita_liquida_anterior) and pd.notna(ativos_totais_anterior) and ativos_totais_anterior != 0:
-            rot_ativos_anterior = receita_liquida_anterior / ativos_totais_anterior
-    except Exception: rot_ativos_anterior = np.nan
-    debug_valores.update({'rot_ativos_atual': rot_ativos_atual, 'rot_ativos_anterior': rot_ativos_anterior})
+    rot_ativos_atual = receita_liquida_atual / ativos_totais_atual if pd.notna(receita_liquida_atual) and pd.notna(ativos_totais_atual) and ativos_totais_atual != 0 else np.nan
+    rot_ativos_anterior = receita_liquida_anterior / ativos_totais_anterior if pd.notna(receita_liquida_anterior) and pd.notna(ativos_totais_anterior) and ativos_totais_anterior != 0 else np.nan
     criterios['aumento_rotatividade_ativos'] = 1 if pd.notna(rot_ativos_atual) and pd.notna(rot_ativos_anterior) and rot_ativos_atual > rot_ativos_anterior else 0
+    debug_valores.update({'rot_ativos_atual': rot_ativos_atual, 'rot_ativos_anterior': rot_ativos_anterior})
 
     score = sum(criterios.values())
     if verbose:
