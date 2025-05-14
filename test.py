@@ -99,7 +99,7 @@ if st.button("Executar Backtest Mensal"):
             continue
 
         # Calcula retornos históricos para otimização (usa últimos 12 meses)
-        lookback_inicio = data_aporte - relativedelta(months=120)
+        lookback_inicio = data_aporte - relativedelta(months=12)
         lookback_prices = precos.loc[lookback_inicio:data_aporte, ativos_validos].dropna()
         if len(lookback_prices) < 2:
             st.warning(f"Dados insuficientes para otimização em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
