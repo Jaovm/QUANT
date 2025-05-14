@@ -17,7 +17,7 @@ st.title("Backtest Mensal com Aportes, Markowitz MC e Rebalanceamento Long Only 
 # Configurações
 valor_aporte = 1000.0
 limite_porc_ativo = 0.3  # 30%
-start_date = pd.to_datetime("2024-10-01")
+start_date = pd.to_datetime("2024-03-01")
 end_date = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
 
 # Input
@@ -74,13 +74,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund = obter_dados_fundamentalistas_detalhados_br(tickers)
         if df_fund.empty:
             st.warning(f"Sem dados fundamentalistas para {data_aporte.strftime('%Y-%m')}. Pulando mês.")
-            # --- Garantir aporte inicial igual ao benchmark se for o primeiro mês ---
-            if idx == 0:
-                preco_bova = precos['BOVA11.SA'].asof(data_aporte)
-                if not np.isnan(preco_bova):
-                    qtd = int(valor_aporte // preco_bova)
-                    carteira['BOVA11.SA'] = qtd
-                    patrimonio = qtd * preco_bova
+            # Não faz aporte em BOVA11 no primeiro mês
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
             continue
@@ -100,10 +94,7 @@ if st.button("Executar Backtest Mensal"):
         # Seleciona ativos válidos
         selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
-        # Se nenhum ativo válido e é o primeiro mês, compre o BOVA11 como fallback para evitar início zerado
-        if not ativos_validos and idx == 0:
-            ativos_validos = ['BOVA11.SA']
-
+        # Não faz aporte no BOVA11 no primeiro mês se não houver ativos válidos
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
@@ -159,17 +150,18 @@ if st.button("Executar Backtest Mensal"):
         historico_pesos.append(portfolio['pesos'])
         historico_num_ativos.append(len(ativos_validos))
 
-    # Simular aportes mensais no BOVA11 (benchmark DCA)
+    # Simular aportes mensais no BOVA11 (benchmark DCA), exceto no primeiro mês
     bova11_prices = precos['BOVA11.SA']
     bova11_quantidade = 0
     bova11_patrimonio = []
 
-    for dt in datas_carteira:
+    for idx, dt in enumerate(datas_carteira):
         preco = bova11_prices.asof(dt)
         if np.isnan(preco):
             bova11_patrimonio.append(np.nan)
             continue
-        qtd_comprada = int(valor_aporte // preco)
+        # Só aportar BOVA11 do segundo mês em diante
+        qtd_comprada = int(valor_aporte // preco) if idx > 0 else 0
         bova11_quantidade += qtd_comprada
         patrimonio_bova = bova11_quantidade * preco
         bova11_patrimonio.append(patrimonio_bova)
