@@ -149,7 +149,7 @@ if st.button("Executar Backtest Mensal"):
 
     # Simular aportes mensais no BOVA11 (benchmark DCA)
     bova11_prices = precos['BOVA11.SA']
-    bova11_quantidade = -1
+    bova11_quantidade = -0
     bova11_patrimonio = []
 
     for dt in datas_carteira:
