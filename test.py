@@ -16,7 +16,7 @@ st.title("Backtest Mensal com Aportes, Markowitz MC e Rebalanceamento Long Only 
 
 # Configurações
 valor_aporte = 1000.0
-limite_porc_ativo = 0.3  # 30%
+limite_porc_ativo = 0.2  # 30%
 start_date = pd.to_datetime("2024-05-05")
 end_date = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
 
@@ -90,7 +90,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 4) & (df_fund['Quant_Value_Score'] >= 0.5)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.4)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
