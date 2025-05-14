@@ -17,7 +17,7 @@ st.title("Backtest Mensal com Aportes, Markowitz MC e Rebalanceamento Long Only 
 # Configurações
 valor_aporte = 1000.0
 limite_porc_ativo = 0.3  # 30%
-start_date = pd.to_datetime("2024-01-01")
+start_date = pd.to_datetime("2024-12-01")
 end_date = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
 
 # Input
@@ -90,7 +90,7 @@ if st.button("Executar Backtest Mensal"):
         df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
         # Seleciona ativos
-        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 6)]
+        selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 6) & (df_fund['Quant_Value_Score'] >= 0.5)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
@@ -111,7 +111,7 @@ if st.button("Executar Backtest Mensal"):
 
         # Otimização (Markowitz MC)
         portfolio, _ = otimizar_portfolio_markowitz_mc(
-            ativos_validos, returns, taxa_livre_risco=0.0
+            ativos_validos, returns, taxa_livre_risco=0.14
         )
         # Limita a 30% por ativo e normaliza
         pesos = pd.Series(portfolio['pesos'])
@@ -149,7 +149,7 @@ if st.button("Executar Backtest Mensal"):
 
     # Simular aportes mensais no BOVA11 (benchmark DCA)
     bova11_prices = precos['BOVA11.SA']
-    bova11_quantidade = 0
+    bova11_quantidade = -1
     bova11_patrimonio = []
 
     for dt in datas_carteira:
