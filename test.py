@@ -89,9 +89,13 @@ if st.button("Executar Backtest Mensal"):
             quant_value_score = pd.Series(quant_value_score, index=df_fund.index)
         df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
-        # Seleciona ativos
+        # Seleciona ativos (ajustado para garantir compra no primeiro mês)
         selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
+        # Se nenhum ativo válido e é o primeiro mês, compre o BOVA11 como fallback para evitar início zerado
+        if not ativos_validos and idx == 0:
+            ativos_validos = ['BOVA11.SA']
+
         if not ativos_validos:
             st.warning(f"Nenhum ativo passou no filtro em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
