@@ -710,7 +710,7 @@ def get_fama_french_factors(start_date, end_date, risk_free_rate_series=None):
     # Proxies brasileiros (ajuste conforme universo disponível)
     factor_tickers = {
         'MKT_PROXY': '^BVSP',      # IBOVESPA como proxy de mercado
-        'SMB_SMALL': '^SMLL',  # iShares Small Cap
+        'SMB_SMALL': 'SMAL11.SA',  # iShares Small Cap
         'SMB_LARGE': 'BOVA11.SA',  # iShares Ibovespa (como 'big caps')
         'HML_VALUE': 'IVVB11.SA',  # Proxy de "valor" (ações EUA na B3, ajuste se preferir)
         'HML_GROWTH': 'SPXI11.SA', # Proxy de "growth" (ETF S&P500 na B3, ajuste se preferir)
