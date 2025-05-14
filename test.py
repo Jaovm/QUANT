@@ -17,7 +17,7 @@ st.title("Backtest Mensal com Aportes, Markowitz MC e Rebalanceamento Long Only 
 # Configurações
 valor_aporte = 1000.0
 limite_porc_ativo = 0.3  # 30%
-start_date = pd.to_datetime("2024-07-01")
+start_date = pd.to_datetime("2024-10-01")
 end_date = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
 
 # Input
@@ -74,9 +74,17 @@ if st.button("Executar Backtest Mensal"):
         df_fund = obter_dados_fundamentalistas_detalhados_br(tickers)
         if df_fund.empty:
             st.warning(f"Sem dados fundamentalistas para {data_aporte.strftime('%Y-%m')}. Pulando mês.")
+            # --- Garantir aporte inicial igual ao benchmark se for o primeiro mês ---
+            if idx == 0:
+                preco_bova = precos['BOVA11.SA'].asof(data_aporte)
+                if not np.isnan(preco_bova):
+                    qtd = int(valor_aporte // preco_bova)
+                    carteira['BOVA11.SA'] = qtd
+                    patrimonio = qtd * preco_bova
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
             continue
+
         df_fund['Piotroski_F_Score'] = df_fund.apply(lambda row: float(calcular_piotroski_f_score_br(row)), axis=1)
         vc_metrics = {
             'trailingPE': 'lower_is_better', 'priceToBook': 'lower_is_better', 
@@ -89,7 +97,7 @@ if st.button("Executar Backtest Mensal"):
             quant_value_score = pd.Series(quant_value_score, index=df_fund.index)
         df_fund['Quant_Value_Score'] = quant_value_score.apply(lambda x: float(x) if np.isscalar(x) else np.nan)
 
-        # Seleciona ativos (ajustado para garantir compra no primeiro mês)
+        # Seleciona ativos válidos
         selecionados = df_fund[(df_fund['Piotroski_F_Score'] >= 5) & (df_fund['Quant_Value_Score'] >= 0.6)]
         ativos_validos = [t for t in selecionados['ticker'].tolist() if t in period_prices.columns and period_prices[t].notna().any()]
         # Se nenhum ativo válido e é o primeiro mês, compre o BOVA11 como fallback para evitar início zerado
@@ -161,7 +169,7 @@ if st.button("Executar Backtest Mensal"):
         if np.isnan(preco):
             bova11_patrimonio.append(np.nan)
             continue
-        qtd_comprada = valor_aporte // preco
+        qtd_comprada = int(valor_aporte // preco)
         bova11_quantidade += qtd_comprada
         patrimonio_bova = bova11_quantidade * preco
         bova11_patrimonio.append(patrimonio_bova)
