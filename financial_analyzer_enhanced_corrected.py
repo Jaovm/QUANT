@@ -241,8 +241,6 @@ def obter_dados_fundamentalistas_detalhados_br(ativos):
             df_fund[col] = pd.to_numeric(df_fund[col], errors='coerce')
     return df_fund
 
-import pandas as pd
-import numpy as np
 
 def _get_numeric_value(row, keys):
     """
