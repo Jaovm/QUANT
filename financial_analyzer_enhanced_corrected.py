@@ -692,23 +692,38 @@ def calcular_volatilidade_garch(returns_series, p=1, q=1):
         print(f"Error fitting GARCH for {returns_series.name}: {e}")
         return np.nan
 
+
+
 def get_fama_french_factors(start_date, end_date, risk_free_rate_series=None):
-    print("Fetching Fama-French factor proxies...")
+    """
+    Busca proxies para fatores Fama-French (mercado, tamanho, valor e momentum) no contexto brasileiro,
+    usando índices e ETFs negociados na B3 disponíveis no Yahoo Finance.
+    Os fatores retornados são:
+        - Mkt-RF: Retorno do IBOVESPA menos taxa livre de risco
+        - SMB: Retorno SMLL11 menos BOVA11 (tamanho: small minus big)
+        - HML: Retorno de valor (IVVB11 como proxy de valor, SPXI11 como proxy de crescimento -- ambos são ETFs de ações, ajuste conforme necessidade)
+        - WML: Retorno de momentum (BOVV11 como proxy, ou use outro ETF de momentum se houver)
+        - RF: Taxa livre de risco diária (default: CDI/252)
+    """
+    print("Buscando proxies dos fatores Fama-French para o Brasil...")
+
+    # Proxies brasileiros (ajuste conforme universo disponível)
     factor_tickers = {
-        'MKT_PROXY': '^GSPC', # S&P 500 as market proxy
-        'SMB_SMALL': '^RUT',  # Russell 2000 for small cap
-        'SMB_LARGE': '^GSPC', # Using S&P 500 again for large cap proxy (common simplification)
-        'HML_VALUE': 'IVE',   # iShares S&P 500 Value ETF
-        'HML_GROWTH':'IVW',  # iShares S&P 500 Growth ETF
-        'WML_MOM': 'MTUM'    # iShares MSCI USA Momentum Factor ETF
+        'MKT_PROXY': '^BVSP',      # IBOVESPA como proxy de mercado
+        'SMB_SMALL': 'SMLL11.SA',  # iShares Small Cap
+        'SMB_LARGE': 'BOVA11.SA',  # iShares Ibovespa (como 'big caps')
+        'HML_VALUE': 'IVVB11.SA',  # Proxy de "valor" (ações EUA na B3, ajuste se preferir)
+        'HML_GROWTH': 'SPXI11.SA', # Proxy de "growth" (ETF S&P500 na B3, ajuste se preferir)
+        'WML_MOM': 'BOVV11.SA'     # Proxy de momentum (ETF Ibov momentum, ajuste se houver outro ETF)
     }
-    
+
+    # Download dos preços dos proxies
     downloaded_data = yf.download(list(factor_tickers.values()), start=start_date, end=end_date, progress=False)
     if downloaded_data.empty:
-        print("Could not download factor proxy data (empty main DataFrame).")
+        print("Não foi possível baixar os dados dos proxies dos fatores.")
         return pd.DataFrame()
 
-    # Determine if 'Adj Close' or 'Close' is available and use it consistently
+    # Seleção da coluna de preço
     price_col_type = None
     if isinstance(downloaded_data.columns, pd.MultiIndex):
         if 'Adj Close' in downloaded_data.columns.levels[0]:
@@ -720,58 +735,42 @@ def get_fama_french_factors(start_date, end_date, risk_free_rate_series=None):
             price_col_type = 'Adj Close'
         elif 'Close' in downloaded_data.columns:
             price_col_type = 'Close'
-            
+
     if price_col_type is None:
-        print(f"Error: Neither 'Adj Close' nor 'Close' found for factor data. Available: {downloaded_data.columns}")
+        print(f"Erro: Nem 'Adj Close' nem 'Close' disponível. Colunas recebidas: {downloaded_data.columns}")
         return pd.DataFrame()
 
     factor_data_raw = downloaded_data[price_col_type]
     if factor_data_raw.empty:
-        print(f"Extracted factor price data ('{price_col_type}') is empty.")
+        print(f"Os dados extraídos de preços dos fatores ('{price_col_type}') estão vazios.")
         return pd.DataFrame()
 
     factor_returns = factor_data_raw.pct_change().dropna(how='all')
     factors_df = pd.DataFrame(index=factor_returns.index)
 
-    # Risk-Free Rate
+    # Taxa Livre de Risco (CDI diária)
     if risk_free_rate_series is None:
-        rf_data_yf = yf.download('^IRX', start=start_date, end=end_date, progress=False) # 13 Week Treasury Bill
-        if not rf_data_yf.empty:
-            rf_price_col = 'Adj Close' if 'Adj Close' in rf_data_yf.columns else 'Close'
-            if rf_price_col in rf_data_yf.columns:
-                rf_series_raw = rf_data_yf[rf_price_col]
-                if pd.api.types.is_numeric_dtype(rf_series_raw):
-                    # ^IRX is an annualized yield percentage. Convert to daily decimal.
-                    daily_rf = (rf_series_raw / 100) / 252 
-                    factors_df['RF'] = daily_rf.reindex(factors_df.index, method='ffill')
-                else:
-                    print("Warning: ^IRX data for risk-free rate is not numeric. Using default.")
-                    factors_df['RF'] = (RISK_FREE_RATE_DEFAULT / 252)
-            else:
-                print("Warning: Could not find 'Adj Close' or 'Close' for ^IRX. Using default.")
-                factors_df['RF'] = (RISK_FREE_RATE_DEFAULT / 252)
-        else:
-            print("Warning: Could not fetch ^IRX for risk-free rate. Using default.")
-            factors_df['RF'] = (RISK_FREE_RATE_DEFAULT / 252)
+        # Aproximação: CDI anualizado para taxa diária (ajuste para fonte real de CDI se desejar)
+        factors_df['RF'] = (RISK_FREE_RATE_DEFAULT / 252)
     else:
         factors_df['RF'] = risk_free_rate_series.reindex(factors_df.index, method='ffill')
 
     factors_df['RF'].fillna(method='ffill', inplace=True)
-    factors_df['RF'].fillna(method='bfill', inplace=True) # Fill any remaining NaNs at the beginning
-    factors_df.dropna(subset=['RF'], inplace=True) # Drop if RF still NaN (e.g. all inputs were NaN)
-    
-    if factors_df.empty and not factor_returns.empty : # If RF failed but returns exist, reindex for common dates
+    factors_df['RF'].fillna(method='bfill', inplace=True)
+    factors_df.dropna(subset=['RF'], inplace=True)
+
+    if factors_df.empty and not factor_returns.empty:
         factors_df = pd.DataFrame(index=factor_returns.index)
         factors_df['RF'] = (RISK_FREE_RATE_DEFAULT / 252)
 
-    # Align factor_returns to factors_df index (which is now based on RF availability)
+    # Alinha datas
     factor_returns = factor_returns.reindex(factors_df.index).dropna(how='all')
     factors_df = factors_df.reindex(factor_returns.index).dropna(how='all')
 
     # Mkt-RF
     if factor_tickers['MKT_PROXY'] in factor_returns.columns and 'RF' in factors_df.columns:
         factors_df['Mkt-RF'] = factor_returns[factor_tickers['MKT_PROXY']] - factors_df['RF']
-    
+
     # SMB (Small Minus Big)
     if factor_tickers['SMB_SMALL'] in factor_returns.columns and factor_tickers['SMB_LARGE'] in factor_returns.columns:
         factors_df['SMB'] = factor_returns[factor_tickers['SMB_SMALL']] - factor_returns[factor_tickers['SMB_LARGE']]
@@ -780,14 +779,9 @@ def get_fama_french_factors(start_date, end_date, risk_free_rate_series=None):
     if factor_tickers['HML_VALUE'] in factor_returns.columns and factor_tickers['HML_GROWTH'] in factor_returns.columns:
         factors_df['HML'] = factor_returns[factor_tickers['HML_VALUE']] - factor_returns[factor_tickers['HML_GROWTH']]
 
-    # WML (Winners Minus Losers) or MOM (Momentum)
-    if factor_tickers['WML_MOM'] in factor_returns.columns and 'RF' in factors_df.columns:
-        # Some definitions of WML are just the momentum factor returns, others are Mom - RF.
-        # Here, using Mom returns directly as WML, or (Mom - RF) if that's the convention desired.
-        # For Fama-French 5-factor, it's often RMW (Robust Minus Weak profitability) and CMA (Conservative Minus Aggressive investment)
-        # The original script used 'WML', implying a momentum factor. MTUM is a momentum ETF.
-        factors_df['WML'] = factor_returns[factor_tickers['WML_MOM']] # Using raw momentum factor returns
-        # If WML should be Mom - RF: factors_df['WML'] = factor_returns[factor_tickers['WML_MOM']] - factors_df['RF']
+    # WML (Momentum)
+    if factor_tickers['WML_MOM'] in factor_returns.columns:
+        factors_df['WML'] = factor_returns[factor_tickers['WML_MOM']]
 
     final_factors = ['Mkt-RF', 'SMB', 'HML', 'WML', 'RF']
     factors_df = factors_df[[col for col in final_factors if col in factors_df.columns]].copy()
